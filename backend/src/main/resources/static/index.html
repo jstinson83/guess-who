@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Guess Who Portrait Generator</title>
+  <link rel="stylesheet" href="/vendor/cropper.min.css" />
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      margin: 0;
+      font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+      background: #f7f7f8;
+      color: #111;
+    }
+    @media (prefers-color-scheme: dark) {
+      body { background: #16171d; color: #eee; }
+    }
+    main {
+      max-width: 640px;
+      margin: 0 auto;
+      padding: 2rem 1rem 4rem;
+    }
+    h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
+    p.subtitle { color: #666; margin-top: 0; margin-bottom: 2rem; }
+    section { margin-bottom: 2rem; }
+    label.field-label { display: block; font-weight: 600; margin-bottom: 0.5rem; }
+    #cropContainer { max-height: 400px; background: #000; display: none; }
+    #cropContainer img { display: block; max-width: 100%; }
+    .traits {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 0.5rem;
+    }
+    .traits label {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      padding: 0.5rem 0.75rem;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+    @media (prefers-color-scheme: dark) {
+      .traits label { border-color: #444; }
+    }
+    button {
+      font: inherit;
+      font-weight: 600;
+      padding: 0.65rem 1.25rem;
+      border-radius: 8px;
+      border: none;
+      background: #111;
+      color: #fff;
+      cursor: pointer;
+    }
+    @media (prefers-color-scheme: dark) {
+      button { background: #eee; color: #111; }
+    }
+    button:disabled { opacity: 0.5; cursor: default; }
+    #status { margin-top: 1rem; font-size: 0.9rem; }
+    #status.error { color: #d33; }
+    #resultImg { display: none; max-width: 100%; border-radius: 8px; margin-top: 1rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Guess Who Portrait Generator</h1>
+    <p class="subtitle">Upload a photo, crop it, pick a few traits, and let Gemini turn it into a stylized portrait.</p>
+
+    <section>
+      <label class="field-label" for="fileInput">1. Choose a photo</label>
+      <input type="file" id="fileInput" accept="image/*" />
+      <div id="cropContainer"><img id="cropImage" alt="" /></div>
+    </section>
+
+    <section>
+      <label class="field-label">2. Pick a few traits</label>
+      <div class="traits" id="traits">
+        <label><input type="checkbox" value="add glasses" /> Glasses</label>
+        <label><input type="checkbox" value="add sunglasses" /> Sunglasses</label>
+        <label><input type="checkbox" value="add a hat" /> Hat</label>
+        <label><input type="checkbox" value="add a mustache" /> Mustache</label>
+        <label><input type="checkbox" value="add a beard" /> Beard</label>
+        <label><input type="checkbox" value="give them long hair" /> Long hair</label>
+        <label><input type="checkbox" value="give them curly hair" /> Curly hair</label>
+        <label><input type="checkbox" value="give them a bigger nose" /> Big nose</label>
+        <label><input type="checkbox" value="give them freckles" /> Freckles</label>
+        <label><input type="checkbox" value="add earrings" /> Earrings</label>
+        <label><input type="checkbox" value="redraw it as a flat-color cartoon illustration" /> Cartoon style</label>
+      </div>
+    </section>
+
+    <section>
+      <button id="generateBtn" disabled>Generate portrait</button>
+      <div id="status"></div>
+      <img id="resultImg" alt="Generated portrait" />
+    </section>
+  </main>
+
+  <script src="/vendor/cropper.min.js"></script>
+  <script>
+    const fileInput = document.getElementById('fileInput');
+    const cropContainer = document.getElementById('cropContainer');
+    const cropImage = document.getElementById('cropImage');
+    const generateBtn = document.getElementById('generateBtn');
+    const statusEl = document.getElementById('status');
+    const resultImg = document.getElementById('resultImg');
+
+    let cropper = null;
+
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+
+      const url = URL.createObjectURL(file);
+      cropImage.src = url;
+      cropContainer.style.display = 'block';
+      resultImg.style.display = 'none';
+      statusEl.textContent = '';
+      statusEl.className = '';
+
+      if (cropper) cropper.destroy();
+      cropImage.onload = () => {
+        cropper = new Cropper(cropImage, { aspectRatio: 1, viewMode: 1 });
+        generateBtn.disabled = false;
+      };
+    });
+
+    generateBtn.addEventListener('click', async () => {
+      if (!cropper) return;
+
+      const traits = Array.from(document.querySelectorAll('#traits input:checked')).map((el) => el.value);
+      if (traits.length === 0) {
+        statusEl.textContent = 'Pick at least one trait.';
+        statusEl.className = 'error';
+        return;
+      }
+
+      const canvas = cropper.getCroppedCanvas({ width: 768, height: 768 });
+      canvas.toBlob(async (blob) => {
+        const form = new FormData();
+        form.append('image', blob, 'photo.png');
+        form.append('traits', JSON.stringify(traits));
+
+        generateBtn.disabled = true;
+        statusEl.textContent = 'Generating…';
+        statusEl.className = '';
+        resultImg.style.display = 'none';
+
+        try {
+          const res = await fetch('/api/transform', { method: 'POST', body: form });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Request failed');
+
+          resultImg.src = data.image;
+          resultImg.style.display = 'block';
+          statusEl.textContent = 'Done.';
+        } catch (err) {
+          statusEl.textContent = err.message;
+          statusEl.className = 'error';
+        } finally {
+          generateBtn.disabled = false;
+        }
+      }, 'image/png');
+    });
+  </script>
+</body>
+</html>
