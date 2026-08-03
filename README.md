@@ -46,26 +46,38 @@ One-time setup (not automated — do this once in the GCP project):
    ```
    (To rotate the key later: `gcloud secrets versions add GEMINI_API_KEY --project=foodie-503510 --data-file=-`.)
 
-2. **Grant the Cloud Run runtime service account access to that secret** (the
-   default compute service account, unless the project uses a custom one):
+2. **Grant the Cloud Run runtime service account access to that secret.**
+   `gcloud run deploy` fails with a `Permission denied on secret` error until
+   this is done — the Console's "reference a secret" UI grants this for you
+   automatically, but a CI-driven `--set-secrets` deploy (what `cloudbuild.yaml`
+   does) does not, so it has to be done up front:
    ```bash
    gcloud secrets add-iam-policy-binding GEMINI_API_KEY \
      --project=foodie-503510 \
-     --member="serviceAccount:PROJECT_NUMBER-compute@developer.gserviceaccount.com" \
+     --member="serviceAccount:124314901354-compute@developer.gserviceaccount.com" \
      --role="roles/secretmanager.secretAccessor"
    ```
+   (`124314901354-compute@developer.gserviceaccount.com` is the default
+   Compute Engine service account for the `foodie-503510` project — that's
+   what Cloud Run uses as the revision's runtime identity unless a custom
+   service account is configured.)
 
-3. **Create the Cloud Build trigger** on push to `main`:
-   ```bash
-   gcloud builds triggers create github \
-     --project=foodie-503510 \
-     --name=guess-who-deploy \
-     --repo-owner=jstinson83 --repo-name=guess-who \
-     --branch-pattern='^main$' \
-     --build-config=cloudbuild.yaml
-   ```
-   (If the GitHub repo isn't connected to Cloud Build yet, the GCP Console
-   will prompt for that the first time: Cloud Build → Triggers → Connect
-   Repository.)
+3. **Connect the repo and create the trigger via the Cloud Run Console**
+   (Cloud Run → Create Service → "Continuously deploy from a repository" →
+   connect `jstinson83/guess-who` → branch `^main$`). This handles the
+   GitHub App connection for you, which the raw
+   `gcloud builds triggers create github --repo-owner=... --repo-name=...`
+   command does **not** — that command fails with `INVALID_ARGUMENT` if the
+   repo hasn't already been connected through the Console (or the GitHub App
+   install) first.
+
+   **Build type matters:** when configuring the trigger, set it to
+   **"Cloud Build configuration file (yaml or json)"** pointing at
+   `/cloudbuild.yaml`, not "Dockerfile". The wizard defaults to Dockerfile
+   build type, which looks for a `Dockerfile` at the repo root and fails
+   with `lstat /workspace/Dockerfile: no such file or directory` (ours is at
+   `backend/Dockerfile`) — and even if it didn't fail, a Dockerfile-type
+   trigger only builds and pushes the image, it never runs the `gcloud run
+   deploy` step, so nothing would actually redeploy.
 
 After that, every push to `main` builds and deploys automatically.

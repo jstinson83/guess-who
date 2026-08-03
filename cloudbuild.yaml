@@ -15,6 +15,7 @@ steps:
       - '--region=${_REGION}'
       - '--platform=managed'
       - '--set-secrets=GEMINI_API_KEY=GEMINI_API_KEY:latest'
+      - '--allow-unauthenticated'
 
 images:
   - '${_IMAGE}'
