@@ -4,70 +4,16 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Guess Who Portrait Generator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/vendor/cropper.min.css" />
-  <style>
-    :root { color-scheme: light dark; }
-    body {
-      margin: 0;
-      font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
-      background: #f7f7f8;
-      color: #111;
-    }
-    @media (prefers-color-scheme: dark) {
-      body { background: #16171d; color: #eee; }
-    }
-    main {
-      max-width: 640px;
-      margin: 0 auto;
-      padding: 2rem 1rem 4rem;
-    }
-    h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
-    p.subtitle { color: #666; margin-top: 0; margin-bottom: 2rem; }
-    section { margin-bottom: 2rem; }
-    label.field-label { display: block; font-weight: 600; margin-bottom: 0.5rem; }
-    #cropContainer { max-height: 400px; background: #000; display: none; }
-    #cropContainer img { display: block; max-width: 100%; }
-    .traits {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-      gap: 0.5rem;
-    }
-    .traits label {
-      display: flex;
-      align-items: center;
-      gap: 0.4rem;
-      border: 1px solid #ccc;
-      border-radius: 8px;
-      padding: 0.5rem 0.75rem;
-      cursor: pointer;
-      font-size: 0.9rem;
-    }
-    @media (prefers-color-scheme: dark) {
-      .traits label { border-color: #444; }
-    }
-    button {
-      font: inherit;
-      font-weight: 600;
-      padding: 0.65rem 1.25rem;
-      border-radius: 8px;
-      border: none;
-      background: #111;
-      color: #fff;
-      cursor: pointer;
-    }
-    @media (prefers-color-scheme: dark) {
-      button { background: #eee; color: #111; }
-    }
-    button:disabled { opacity: 0.5; cursor: default; }
-    #status { margin-top: 1rem; font-size: 0.9rem; }
-    #status.error { color: #d33; }
-    #resultImg { display: none; max-width: 100%; border-radius: 8px; margin-top: 1rem; }
-  </style>
+  <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
   <main>
     <h1>Guess Who Portrait Generator</h1>
-    <p class="subtitle">Upload a photo, crop it, pick a few traits, and let Gemini turn it into a stylized portrait.</p>
+    <p class="subtitle">Upload a photo, crop it, pick a few traits, and let Gemini turn it into a cartoon portrait.</p>
 
     <section>
       <label class="field-label" for="fileInput">1. Choose a photo</label>
@@ -77,18 +23,18 @@
 
     <section>
       <label class="field-label">2. Pick a few traits</label>
+      <label class="field-hint">Every portrait is drawn as a cartoon automatically — these are optional extra touches.</label>
       <div class="traits" id="traits">
-        <label><input type="checkbox" value="add glasses" /> Glasses</label>
-        <label><input type="checkbox" value="add sunglasses" /> Sunglasses</label>
-        <label><input type="checkbox" value="add a hat" /> Hat</label>
-        <label><input type="checkbox" value="add a mustache" /> Mustache</label>
-        <label><input type="checkbox" value="add a beard" /> Beard</label>
-        <label><input type="checkbox" value="give them long hair" /> Long hair</label>
-        <label><input type="checkbox" value="give them curly hair" /> Curly hair</label>
-        <label><input type="checkbox" value="give them a bigger nose" /> Big nose</label>
-        <label><input type="checkbox" value="give them freckles" /> Freckles</label>
-        <label><input type="checkbox" value="add earrings" /> Earrings</label>
-        <label><input type="checkbox" value="redraw it as a flat-color cartoon illustration" /> Cartoon style</label>
+        <label class="switch"><input type="checkbox" value="add glasses" /><span class="switch-track"></span>Glasses</label>
+        <label class="switch"><input type="checkbox" value="add sunglasses" /><span class="switch-track"></span>Sunglasses</label>
+        <label class="switch"><input type="checkbox" value="add a hat" /><span class="switch-track"></span>Hat</label>
+        <label class="switch"><input type="checkbox" value="add a mustache" /><span class="switch-track"></span>Mustache</label>
+        <label class="switch"><input type="checkbox" value="add a beard" /><span class="switch-track"></span>Beard</label>
+        <label class="switch"><input type="checkbox" value="give them long hair" /><span class="switch-track"></span>Long hair</label>
+        <label class="switch"><input type="checkbox" value="give them curly hair" /><span class="switch-track"></span>Curly hair</label>
+        <label class="switch"><input type="checkbox" value="give them a bigger nose" /><span class="switch-track"></span>Big nose</label>
+        <label class="switch"><input type="checkbox" value="give them freckles" /><span class="switch-track"></span>Freckles</label>
+        <label class="switch"><input type="checkbox" value="add earrings" /><span class="switch-track"></span>Earrings</label>
       </div>
     </section>
 
@@ -132,11 +78,6 @@
       if (!cropper) return;
 
       const traits = Array.from(document.querySelectorAll('#traits input:checked')).map((el) => el.value);
-      if (traits.length === 0) {
-        statusEl.textContent = 'Pick at least one trait.';
-        statusEl.className = 'error';
-        return;
-      }
 
       const canvas = cropper.getCroppedCanvas({ width: 768, height: 768 });
       canvas.toBlob(async (blob) => {

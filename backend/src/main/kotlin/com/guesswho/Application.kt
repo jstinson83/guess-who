@@ -96,10 +96,6 @@ fun Application.module() {
             }
 
             val traits = runCatching { Json.decodeFromString<List<String>>(traitsRaw) }.getOrDefault(emptyList())
-            if (traits.isEmpty()) {
-                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Select at least one trait"))
-                return@post
-            }
 
             val apiKey = System.getenv("GEMINI_API_KEY")
             if (apiKey.isNullOrBlank()) {
@@ -107,8 +103,10 @@ fun Application.module() {
                 return@post
             }
 
-            val prompt = "Edit this photo of a person. Apply these changes: ${traits.joinToString(", ")}. " +
-                "Keep the person clearly recognizable and leave everything else about the photo unchanged."
+            val traitsClause = if (traits.isNotEmpty()) " Also apply these changes: ${traits.joinToString(", ")}." else ""
+            val prompt = "Redraw this photo of a person as a bold, flat-color cartoon illustration — a stylized " +
+                "cartoon portrait, not a photorealistic edit.$traitsClause Keep the person clearly recognizable, " +
+                "and keep the framing and background the same otherwise."
 
             val geminiRequest = GeminiRequest(
                 contents = listOf(
