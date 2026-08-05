@@ -26,6 +26,9 @@ dependencies {
     implementation("io.ktor:ktor-client-content-negotiation-jvm:$ktorVersion")
 
     implementation("ch.qos.logback:logback-classic:1.5.6")
+
+    testImplementation(kotlin("test"))
+    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
 }
 
 application {
@@ -34,4 +37,8 @@ application {
 
 kotlin {
     jvmToolchain(21)
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
