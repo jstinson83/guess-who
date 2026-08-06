@@ -32,12 +32,17 @@ precisely, and what bit us before."
 - **Backend**: Kotlin + Ktor, single service (`backend/`). Routes are split
   by concern: `Application.kt` (server setup + `/api/transform`) and
   `board/BoardRoutes.kt` (`/api/boards/...`).
-- **AI**: Gemini's image-editing model, called once per portrait request via
-  the shared `generatePortrait()` helper (`Gemini.kt`) — a photo plus a list
-  of trait phrases goes in, one stylized cartoon image comes back. No
-  multi-turn conversation, no comparison against other portraits. Used by
-  both the standalone `/api/transform` endpoint and the board add-character
-  flow, so the prompt lives in exactly one place.
+- **AI**: two Gemini call sites. `generatePortrait()` (`Gemini.kt`) — a photo
+  plus a list of trait phrases to add and a list to explicitly leave out
+  goes in, one stylized cartoon image comes back (framed head-and-shoulders,
+  background replaced with a plain color). Used by both the standalone
+  `/api/transform` endpoint and the board add-character flow, so the prompt
+  lives in exactly one place. `detectTraits()` (`board/TraitDetection.kt`,
+  board-only) — a photo plus the board's currently-available feature list
+  goes in, a JSON list of which of those features are visually present
+  comes back, used to pre-check the add-character feature boxes before the
+  user confirms/edits and generates. Both are single-shot: no multi-turn
+  conversation, no comparison against other portraits.
 - **Storage**: Firestore (Native mode), via `com.google.cloud:google-cloud-firestore`
   and application-default credentials — no ORM, plain client calls behind a
   `BoardRepository` interface (`board/BoardRepository.kt`,
@@ -112,6 +117,14 @@ precisely, and what bit us before."
   add-a-character flow reusing the Cropper.js crop step) —
   `static/index.html` + `static/app.js`. This replaced the old single-page
   freeform-trait upload UI as the app's front door.
+- Add-character flow auto-detects visible traits right after cropping
+  (`POST /api/boards/{id}/characters/detect-traits`, calls `detectTraits()`)
+  and pre-checks the matching feature boxes — still editable before the
+  user hits generate. Unchecking a detected trait tells `generatePortrait()`
+  to explicitly leave it out (`removeTraits` field), rather than only ever
+  layering requested traits on top of whatever the photo already shows.
+  A loading spinner/greyed-out panel covers both the detection call and
+  the final generate call.
 - `POST /api/transform` (`Application.kt`): unchanged standalone endpoint —
   accepts a cropped photo plus a JSON-encoded list of trait strings and
   returns one Gemini-generated cartoon portrait, no board involved. Kept

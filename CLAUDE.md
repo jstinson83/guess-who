@@ -82,12 +82,17 @@ version and then rebuilt with boards + Firestore in a later session — see
 
 ## Operational gotchas
 
-- **Gemini model name**: currently `gemini-2.5-flash-image`, hardcoded as
-  `GEMINI_MODEL` in `Application.kt` (one call site today — if the board/
-  feature-pool work in the roadmap adds more Gemini calls, keep the model
-  name in one shared place rather than letting it drift per call site).
-  Gemini model names churn on Google's release schedule outside our
-  control; if `/api/transform` starts returning 404 for the model, check
+- **Gemini model names**: two call sites now, two different models, each a
+  single constant next to its call site rather than scattered inline
+  strings. Image generation (`generatePortrait` in `Gemini.kt`) uses
+  `GEMINI_MODEL` = `gemini-2.5-flash-image`. Trait detection (`detectTraits`
+  in `board/TraitDetection.kt`, image-in/JSON-out, used to pre-check
+  add-character feature boxes from the photo) uses the private
+  `GEMINI_TRAIT_MODEL` = `gemini-2.5-flash` in that same file — a
+  text-out-capable model, since the image-gen model can't also return
+  structured data about what it saw. Gemini model names churn on Google's
+  release schedule outside our control; if either endpoint starts
+  returning 404 for its model, check
   https://ai.google.dev/gemini-api/docs/models for the current name.
 - **Deploy pipeline**: fully documented in `README.md` (Cloud Build →
   Artifact Registry → Cloud Run, one-time GCP setup steps). This repo

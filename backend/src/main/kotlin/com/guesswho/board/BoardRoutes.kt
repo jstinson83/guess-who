@@ -108,6 +108,44 @@ fun Route.boardRoutes(repository: Lazy<BoardRepository>, httpClient: HttpClient)
                 call.respondBytes(portrait.bytes, ContentType.parse(portrait.contentType))
             }
 
+            post("/characters/detect-traits") {
+                val boardId = call.parameters["id"]!!
+                val board = repository.value.getBoard(boardId)
+                if (board == null) {
+                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Board not found"))
+                    return@post
+                }
+
+                var imageBytes: ByteArray? = null
+                var imageMime = "image/png"
+
+                call.receiveMultipart().forEachPart { part ->
+                    if (part is PartData.FileItem) {
+                        imageBytes = part.streamProvider().readBytes()
+                        imageMime = part.contentType?.toString() ?: "image/png"
+                    }
+                    part.dispose()
+                }
+
+                val bytes = imageBytes
+                if (bytes == null) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing 'image'"))
+                    return@post
+                }
+
+                val apiKey = System.getenv("GEMINI_API_KEY")
+                if (apiKey.isNullOrBlank()) {
+                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "GEMINI_API_KEY is not set on the server"))
+                    return@post
+                }
+
+                val candidates = BoardBalancer.availableFeatures(board).filter { it.available }.map { it.feature }
+                when (val result = detectTraits(httpClient, apiKey, bytes, imageMime, candidates)) {
+                    is TraitDetectionResult.Failure -> call.respond(result.status, mapOf("error" to result.error))
+                    is TraitDetectionResult.Success -> call.respond(mapOf("traitIds" to result.traitIds.toList()))
+                }
+            }
+
             post("/complete") {
                 val board = repository.value.completeBoard(call.parameters["id"]!!)
                 if (board == null) {
@@ -124,6 +162,7 @@ fun Route.boardRoutes(repository: Lazy<BoardRepository>, httpClient: HttpClient)
                 var imageMime = "image/png"
                 var name = ""
                 var traitsRaw = "[]"
+                var removeTraitsRaw = "[]"
 
                 call.receiveMultipart().forEachPart { part ->
                     when (part) {
@@ -134,6 +173,7 @@ fun Route.boardRoutes(repository: Lazy<BoardRepository>, httpClient: HttpClient)
                         is PartData.FormItem -> when (part.name) {
                             "name" -> name = part.value
                             "traits" -> traitsRaw = part.value
+                            "removeTraits" -> removeTraitsRaw = part.value
                             else -> {}
                         }
                         else -> {}
@@ -154,9 +194,11 @@ fun Route.boardRoutes(repository: Lazy<BoardRepository>, httpClient: HttpClient)
                 }
 
                 val traitIds = runCatching { Json.decodeFromString<List<String>>(traitsRaw) }.getOrDefault(emptyList()).toSet()
+                val removeTraitIds = runCatching { Json.decodeFromString<List<String>>(removeTraitsRaw) }.getOrDefault(emptyList()).toSet()
                 val featureLabels = traitIds.mapNotNull { id -> DefaultFeaturePool.allFeatures().find { it.id == id }?.label }
+                val removeFeatureLabels = removeTraitIds.mapNotNull { id -> DefaultFeaturePool.allFeatures().find { it.id == id }?.label }
 
-                when (val result = generatePortrait(httpClient, apiKey, bytes, imageMime, featureLabels)) {
+                when (val result = generatePortrait(httpClient, apiKey, bytes, imageMime, featureLabels, removeFeatureLabels)) {
                     is PortraitResult.Failure -> {
                         call.respond(result.status, mapOf("error" to result.error))
                         return@post

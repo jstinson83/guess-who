@@ -29,6 +29,13 @@ data class GeminiContent(val parts: List<GeminiPart>)
 data class GeminiRequest(val contents: List<GeminiContent>)
 
 @Serializable
+data class GeminiGenerationConfig(val responseMimeType: String)
+
+/** Like [GeminiRequest], but for text-out calls (e.g. trait detection) that need JSON-formatted output. */
+@Serializable
+data class GeminiTextRequest(val contents: List<GeminiContent>, val generationConfig: GeminiGenerationConfig)
+
+@Serializable
 data class GeminiCandidate(val content: GeminiContent? = null)
 
 @Serializable
@@ -41,8 +48,10 @@ sealed interface PortraitResult {
 
 /**
  * Redraws [imageBytes] as a cartoon Guess Who portrait via Gemini, applying [traitPhrases]
- * verbatim into the prompt. Shared by the standalone `/api/transform` endpoint and the
- * board add-character flow so the Gemini call and prompt live in exactly one place.
+ * verbatim into the prompt and explicitly excluding [removeTraitPhrases] (features the source
+ * photo happens to show but that weren't selected, e.g. a detected hat the user unchecked).
+ * Shared by the standalone `/api/transform` endpoint and the board add-character flow so the
+ * Gemini call and prompt live in exactly one place.
  */
 suspend fun generatePortrait(
     httpClient: HttpClient,
@@ -50,11 +59,16 @@ suspend fun generatePortrait(
     imageBytes: ByteArray,
     imageMime: String,
     traitPhrases: List<String>,
+    removeTraitPhrases: List<String> = emptyList(),
 ): PortraitResult {
-    val traitsClause = if (traitPhrases.isNotEmpty()) " Also apply these changes: ${traitPhrases.joinToString(", ")}." else ""
+    val traitsClause = if (traitPhrases.isNotEmpty()) " Give the person these features: ${traitPhrases.joinToString(", ")}." else ""
+    val removeClause = if (removeTraitPhrases.isNotEmpty()) {
+        " The photo shows ${removeTraitPhrases.joinToString(", ")} — leave that out of the cartoon."
+    } else ""
     val prompt = "Redraw this photo of a person as a bold, flat-color cartoon illustration — a stylized " +
-        "cartoon portrait, not a photorealistic edit.$traitsClause Keep the person clearly recognizable, " +
-        "and keep the framing and background the same otherwise."
+        "cartoon portrait, not a photorealistic edit. Crop and reframe to a head-and-shoulders portrait " +
+        "centered on the face, and replace the background with a plain solid color so the person is the " +
+        "only subject in frame.$traitsClause$removeClause Keep the person clearly recognizable."
 
     val geminiRequest = GeminiRequest(
         contents = listOf(
