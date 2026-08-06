@@ -22,9 +22,41 @@ interface FeaturePool {
 }
 
 /** Feature ids present on a character; absence means "no" — there is no tri-state. */
-data class Character(val id: String, val traits: Set<String>)
+data class Character(
+    val id: String,
+    val traits: Set<String>,
+    val name: String = "",
+    val portraitDataUrl: String? = null,
+)
 
-data class BoardState(val targetSize: Int, val characters: List<Character> = emptyList())
+enum class BoardStatus { IN_PROGRESS, COMPLETE }
+
+/**
+ * [id] is empty for a board that hasn't been persisted yet (e.g. inside [BoardBalancer]'s
+ * pure functions, which only care about [targetSize] and [characters]); a [BoardRepository]
+ * fills in identity/status/timestamps on create.
+ */
+data class BoardState(
+    val targetSize: Int,
+    val characters: List<Character> = emptyList(),
+    val id: String = "",
+    val name: String = "",
+    val category: String = "Custom",
+    val status: BoardStatus = BoardStatus.IN_PROGRESS,
+    val createdAt: String = "",
+    val updatedAt: String = "",
+)
+
+/** Lightweight projection of a [BoardState] for list views, without pulling every character. */
+data class BoardSummary(
+    val id: String,
+    val name: String,
+    val category: String,
+    val targetSize: Int,
+    val characterCount: Int,
+    val status: BoardStatus,
+    val updatedAt: String,
+)
 
 enum class BalanceState { TOO_FEW, ON_TARGET, TOO_MANY }
 

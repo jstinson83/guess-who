@@ -1,31 +1,47 @@
-# Guess Who Portrait Generator
+# Guess Who Boards
 
-Upload a photo, crop it, pick a few traits (glasses, mustache, hat, ...), and
-Gemini edits the photo accordingly. Single page, single backend endpoint.
+Create a board for a group (family, friends, office, ...), then add people to
+it one photo at a time: crop the photo, pick from a real feature pool
+(glasses, hat, beard, ...), and Gemini generates a stylized cartoon portrait.
+Boards persist in Firestore and can be reloaded in-progress or complete.
 
 ## Run it
 
 ```bash
 cd backend
 export GEMINI_API_KEY=your-key-here
+gcloud auth application-default login   # only needed once per machine, for Firestore
 ./gradlew run
 ```
 
-Open http://localhost:8080.
+Open http://localhost:8080. `GEMINI_API_KEY` is required for any portrait
+generation (standalone or board add-character). Firestore access
+(application-default credentials, see above) is only needed once you hit a
+`/api/boards/...` route — the app starts fine without it.
 
 ## How it's built
 
-- `backend/src/main/kotlin/com/guesswho/Application.kt` — one Ktor server:
-  serves the static page and exposes `POST /api/transform`, which forwards
-  the cropped photo plus the selected traits to Gemini's image-editing model
-  (`gemini-2.5-flash-image`) and returns the resulting image.
-- `backend/src/main/resources/static/index.html` — the whole frontend: file
-  upload, a [Cropper.js](https://github.com/fengyuanchen/cropperjs) crop box
-  (vendored locally in `static/vendor/`, no CDN dependency), trait
-  checkboxes, and the result image.
+- `backend/src/main/kotlin/com/guesswho/Application.kt` — Ktor server setup
+  plus the standalone `POST /api/transform` endpoint (crop a photo, pick
+  freeform traits, get one Gemini-generated cartoon portrait back — no board
+  involved).
+- `backend/src/main/kotlin/com/guesswho/Gemini.kt` — the shared Gemini call
+  (`generatePortrait()`), used by both `/api/transform` and the board
+  add-character flow.
+- `backend/src/main/kotlin/com/guesswho/board/` — the board domain model
+  (`BoardModel.kt`), the balancing engine (`BoardBalancer.kt`,
+  `DefaultFeaturePool.kt`), the Firestore-backed persistence
+  (`BoardRepository.kt`, `FirestoreBoardRepository.kt`), and the board HTTP
+  routes (`BoardRoutes.kt`) — `POST/GET /api/boards`, `GET /api/boards/{id}`,
+  `POST /api/boards/{id}/characters`, `POST /api/boards/{id}/complete`.
+- `backend/src/main/resources/static/` — the whole frontend: `index.html` +
+  `app.js` (board list/create view and board detail/add-character view,
+  hash-routed at `#/board/<id>`), a
+  [Cropper.js](https://github.com/fengyuanchen/cropperjs) crop box (vendored
+  locally in `static/vendor/`, no CDN dependency), and `styles.css`.
 
-No database, no build step for the frontend, no framework — it's one HTML
-file and one Kotlin file.
+No frontend build step, no framework — plain HTML/CSS/JS served directly by
+Ktor. Persistence is Firestore (Native mode), no other database.
 
 ## Deploying (Cloud Build → Cloud Run)
 
@@ -55,7 +71,16 @@ One-time setup (not automated — do this once in the GCP project):
      --role="roles/secretmanager.secretAccessor"
    ```
 
-3. **Create the Cloud Build trigger** on push to `main`:
+3. **Grant the same service account Firestore access** (boards won't
+   persist without this — the Firestore API itself is assumed already
+   enabled on the project):
+   ```bash
+   gcloud projects add-iam-policy-binding foodie-503510 \
+     --member="serviceAccount:PROJECT_NUMBER-compute@developer.gserviceaccount.com" \
+     --role="roles/datastore.user"
+   ```
+
+4. **Create the Cloud Build trigger** on push to `main`:
    ```bash
    gcloud builds triggers create github \
      --project=foodie-503510 \
