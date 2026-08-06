@@ -54,9 +54,9 @@ fix the checklist, don't quietly reinterpret the spec.
 
 ## Workflow conventions
 
-- After pushing commits to a feature branch, open a PR against `main` (the
-  maintainer merges from the PR link) — but only when asked to, per the
-  session's own instructions; don't open one unprompted.
+- After pushing commits to a feature branch, always open a PR against
+  `main` (the maintainer merges from the PR link) — do this automatically
+  once a change is pushed, without waiting to be asked.
 - Feature branches get reused across tasks. If a branch's previous PR has
   already merged, rebuild it from `origin/main` before adding new commits
   (`git checkout -B <branch> origin/main`) rather than stacking on
