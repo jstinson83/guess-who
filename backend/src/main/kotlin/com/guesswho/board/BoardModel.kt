@@ -26,7 +26,7 @@ data class Character(
     val id: String,
     val traits: Set<String>,
     val name: String = "",
-    val portraitDataUrl: String? = null,
+    val hasPortrait: Boolean = false,
 )
 
 enum class BoardStatus { IN_PROGRESS, COMPLETE }

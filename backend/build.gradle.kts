@@ -27,9 +27,10 @@ dependencies {
 
     implementation("ch.qos.logback:logback-classic:1.5.6")
 
-    // BOM keeps Firestore's transitive gRPC/protobuf stack internally consistent.
+    // BOM keeps Firestore/Storage's transitive gRPC/protobuf stack internally consistent.
     implementation(platform("com.google.cloud:libraries-bom:26.65.0"))
     implementation("com.google.cloud:google-cloud-firestore")
+    implementation("com.google.cloud:google-cloud-storage")
 
     testImplementation(kotlin("test"))
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")

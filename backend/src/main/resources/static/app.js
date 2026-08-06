@@ -162,7 +162,7 @@ function renderCharacterGrid() {
       .map((id) => currentBoard.featureStatuses.find((f) => f.id === id)?.label || id)
       .join(', ');
     card.innerHTML = `
-      <img src="${character.portraitDataUrl || ''}" alt="${escapeHtml(character.name)}" />
+      <img src="${character.portraitUrl || ''}" alt="${escapeHtml(character.name)}" />
       <div class="character-card-name">${escapeHtml(character.name || 'Unnamed')}</div>
       <div class="character-card-traits">${escapeHtml(traitLabels || 'No features')}</div>
     `;
@@ -239,7 +239,7 @@ generateBtn.addEventListener('click', async () => {
 
       currentBoard = board;
       const added = board.characters[board.characters.length - 1];
-      resultImg.src = added.portraitDataUrl;
+      resultImg.src = added.portraitUrl;
       resultImg.style.display = 'block';
       statusEl.textContent = `Added ${added.name || 'character'} to the board.`;
 

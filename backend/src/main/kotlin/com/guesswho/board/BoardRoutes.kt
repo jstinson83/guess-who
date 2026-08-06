@@ -2,7 +2,9 @@ package com.guesswho.board
 
 import com.guesswho.PortraitResult
 import com.guesswho.generatePortrait
+import com.guesswho.storage.StoredPortrait
 import io.ktor.client.HttpClient
+import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.PartData
 import io.ktor.http.content.forEachPart
@@ -11,6 +13,7 @@ import io.ktor.server.application.call
 import io.ktor.server.request.receive
 import io.ktor.server.request.receiveMultipart
 import io.ktor.server.response.respond
+import io.ktor.server.response.respondBytes
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
@@ -22,7 +25,7 @@ import kotlinx.serialization.json.Json
 data class CreateBoardRequest(val name: String, val targetSize: Int)
 
 @Serializable
-data class CharacterDto(val id: String, val name: String, val traits: List<String>, val portraitDataUrl: String?)
+data class CharacterDto(val id: String, val name: String, val traits: List<String>, val portraitUrl: String?)
 
 @Serializable
 data class FeatureStatusDto(
@@ -94,6 +97,17 @@ fun Route.boardRoutes(repository: Lazy<BoardRepository>, httpClient: HttpClient)
                 call.respond(board.toDetailDto())
             }
 
+            get("/characters/{characterId}/portrait") {
+                val boardId = call.parameters["id"]!!
+                val characterId = call.parameters["characterId"]!!
+                val portrait = repository.value.getCharacterPortrait(boardId, characterId)
+                if (portrait == null) {
+                    call.respond(HttpStatusCode.NotFound)
+                    return@get
+                }
+                call.respondBytes(portrait.bytes, ContentType.parse(portrait.contentType))
+            }
+
             post("/complete") {
                 val board = repository.value.completeBoard(call.parameters["id"]!!)
                 if (board == null) {
@@ -148,7 +162,8 @@ fun Route.boardRoutes(repository: Lazy<BoardRepository>, httpClient: HttpClient)
                         return@post
                     }
                     is PortraitResult.Success -> {
-                        val board = repository.value.addCharacter(boardId, name, traitIds, result.dataUrl)
+                        val portrait = StoredPortrait(result.imageBytes, result.mimeType)
+                        val board = repository.value.addCharacter(boardId, name, traitIds, portrait)
                         if (board == null) {
                             call.respond(HttpStatusCode.NotFound, mapOf("error" to "Board not found"))
                             return@post
@@ -166,7 +181,14 @@ private fun BoardState.toDetailDto() = BoardDetailDto(
     name = name,
     targetSize = targetSize,
     status = status.name,
-    characters = characters.map { CharacterDto(it.id, it.name, it.traits.toList(), it.portraitDataUrl) },
+    characters = characters.map {
+        CharacterDto(
+            id = it.id,
+            name = it.name,
+            traits = it.traits.toList(),
+            portraitUrl = if (it.hasPortrait) "/api/boards/$id/characters/${it.id}/portrait" else null,
+        )
+    },
     featureStatuses = BoardBalancer.featureCounts(this).map {
         FeatureStatusDto(
             id = it.feature.id,

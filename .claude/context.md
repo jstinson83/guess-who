@@ -42,10 +42,15 @@ precisely, and what bit us before."
   and application-default credentials — no ORM, plain client calls behind a
   `BoardRepository` interface (`board/BoardRepository.kt`,
   `FirestoreBoardRepository.kt`). One `boards` collection; each board's
-  characters live in a `characters` subcollection underneath it. See
-  `CLAUDE.md` for the schema, the ADC/IAM setup this requires, and the
-  Firestore-specific gotchas (`ApiFuture` vs. Guava's `ListenableFuture`,
-  the 1 MiB document-size limit on inline portrait images).
+  characters live in a `characters` subcollection underneath it. Portrait
+  image bytes live in Cloud Storage instead of inline on the Firestore
+  document, behind a `PortraitStore` interface (`storage/PortraitStore.kt`,
+  `GcsPortraitStore` impl) — the character document just records
+  `hasPortrait: Boolean`, and the server streams the image back through
+  `GET /api/boards/{id}/characters/{characterId}/portrait`. See `CLAUDE.md`
+  for the schema, the ADC/IAM setup this requires, and the Firestore/GCS
+  gotchas (`ApiFuture` vs. Guava's `ListenableFuture`, the bucket/IAM setup
+  and object-naming scheme for portraits).
 - **Frontend**: one static HTML page (`backend/src/main/resources/static/index.html`)
   plus `app.js` (view logic) and vendored `Cropper.js` for the crop UI,
   served directly by Ktor's `staticResources` — no framework, no build
@@ -131,11 +136,11 @@ precisely, and what bit us before."
   was more infra than this session needed — Firestore was already enabled
   on the GCP project and required no additional setup beyond IAM. See
   `CLAUDE.md` for the schema and gotchas.
-- **Portrait images stored inline** as base64 data URLs on the Firestore
-  character document, not in Cloud Storage. Simplest option and fine at
-  today's portrait sizes, but Firestore documents cap at 1 MiB total —
-  see the `CLAUDE.md` gotcha. Revisit with Cloud Storage + a URL field if
-  that ever gets hit.
+- **Portrait images moved to Cloud Storage**, out of inline base64 data
+  URLs on the Firestore character document. The inline approach hit
+  Firestore's 1 MiB per-document cap in practice, not just in theory — see
+  the `CLAUDE.md` gotcha for the bucket/IAM setup and object-naming scheme
+  that replaced it.
 - The old single-page upload form's freeform trait checkboxes are gone —
   the add-character flow now uses the real feature pool. `/api/transform`
   itself is untouched and still accepts freeform trait strings, since

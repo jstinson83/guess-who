@@ -35,7 +35,7 @@ data class GeminiCandidate(val content: GeminiContent? = null)
 data class GeminiResponse(val candidates: List<GeminiCandidate> = emptyList())
 
 sealed interface PortraitResult {
-    data class Success(val dataUrl: String) : PortraitResult
+    data class Success(val imageBytes: ByteArray, val mimeType: String) : PortraitResult
     data class Failure(val status: HttpStatusCode, val error: String) : PortraitResult
 }
 
@@ -81,5 +81,5 @@ suspend fun generatePortrait(
     val image = geminiResponse.candidates.firstOrNull()?.content?.parts?.firstOrNull { it.inlineData != null }?.inlineData
         ?: return PortraitResult.Failure(HttpStatusCode.BadGateway, "Gemini did not return an image")
 
-    return PortraitResult.Success("data:${image.mimeType};base64,${image.data}")
+    return PortraitResult.Success(Base64.getDecoder().decode(image.data), image.mimeType)
 }

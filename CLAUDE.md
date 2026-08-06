@@ -136,9 +136,34 @@ version and then rebuilt with boards + Firestore in a later session — see
     looking like one). Don't add that dependency expecting it to bridge
     Firestore calls — use the local `ApiFuture<T>.await()` extension in
     `board/ApiFutureAwait.kt` instead.
-  - **1 MiB document-size limit**: portrait images are stored inline as
-    base64 data URLs on the character document. Fine at today's portrait
-    sizes, but if Gemini output grows (larger crops, a different model) a
-    character document can exceed Firestore's per-document cap. If that
-    ever happens, move portraits to Cloud Storage and store a URL instead
-    of the data URL — don't try to chunk/compress around the limit.
+  - **Portrait images live in Cloud Storage, not inline**: base64 data URLs
+    on the character document routinely blew past Firestore's 1 MiB
+    per-document cap, so the character document only stores
+    `hasPortrait: Boolean` — the actual bytes go through `PortraitStore`
+    (`storage/PortraitStore.kt`, `GcsPortraitStore` impl) into a bucket, at
+    a deterministic object name (`boards/{boardId}/characters/{characterId}`,
+    computed by `FirestoreBoardRepository.portraitObjectName` — not stored
+    anywhere, so there's no separate field to keep in sync). Don't reuse
+    that inline-data-URL pattern for any future large blob (e.g. game
+    assets) — same cap applies.
+    - **Bucket**: `PORTRAIT_BUCKET` in `Application.kt`
+      (`foodie-503510-guess-who-portraits` — prefixed with the project id
+      since GCS bucket names are globally unique across all of GCP, not
+      just this project). Must exist before the app can use it, same as
+      the named Firestore database — see `README.md`'s one-time
+      `gcloud storage buckets create` step. Uniform bucket-level access,
+      no public read: the server is the only reader, via
+      `GET /api/boards/{id}/characters/{characterId}/portrait`
+      (`BoardRoutes.kt`), which fetches through `BoardRepository` and
+      streams the bytes back — the client never talks to GCS directly.
+    - **IAM**: the Cloud Run runtime service account needs
+      `roles/storage.objectAdmin` scoped to that one bucket (not
+      project-wide `roles/storage.admin` — that would also reach the
+      unrelated `foodie` app's buckets in the same project). One-time
+      `gcloud storage buckets add-iam-policy-binding` grant, see
+      `README.md`.
+    - **Credentials**: same application-default credentials as Firestore
+      (`gcloud auth application-default login` locally); `PortraitStore`
+      is built lazily alongside `BoardRepository` in `Application.kt` for
+      the same reason — a plain `/api/transform`-only local run shouldn't
+      need any GCP setup.

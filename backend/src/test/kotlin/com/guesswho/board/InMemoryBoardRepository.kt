@@ -1,5 +1,6 @@
 package com.guesswho.board
 
+import com.guesswho.storage.StoredPortrait
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -7,6 +8,7 @@ import java.util.concurrent.atomic.AtomicInteger
 class InMemoryBoardRepository : BoardRepository {
     private val nextId = AtomicInteger(1)
     private val boards = linkedMapOf<String, BoardState>()
+    private val portraits = mutableMapOf<String, StoredPortrait>()
 
     override suspend fun createBoard(name: String, targetSize: Int): BoardState {
         val now = Instant.now().toString()
@@ -33,14 +35,19 @@ class InMemoryBoardRepository : BoardRepository {
         boardId: String,
         name: String,
         traits: Set<String>,
-        portraitDataUrl: String?,
+        portrait: StoredPortrait?,
     ): BoardState? {
         val board = boards[boardId] ?: return null
-        val character = Character(id = "character-${nextId.getAndIncrement()}", traits = traits, name = name, portraitDataUrl = portraitDataUrl)
+        val characterId = "character-${nextId.getAndIncrement()}"
+        val character = Character(id = characterId, traits = traits, name = name, hasPortrait = portrait != null)
+        if (portrait != null) portraits["$boardId/$characterId"] = portrait
         val updated = board.copy(characters = board.characters + character, updatedAt = Instant.now().toString())
         boards[boardId] = updated
         return updated
     }
+
+    override suspend fun getCharacterPortrait(boardId: String, characterId: String): StoredPortrait? =
+        portraits["$boardId/$characterId"]
 
     override suspend fun completeBoard(id: String): BoardState? {
         val board = boards[id] ?: return null
