@@ -11,6 +11,8 @@ const traitsEl = document.getElementById('traits');
 const fileInput = document.getElementById('fileInput');
 const cropContainer = document.getElementById('cropContainer');
 const cropImage = document.getElementById('cropImage');
+const confirmCropBtn = document.getElementById('confirmCropBtn');
+const featuresStep = document.getElementById('featuresStep');
 const personNameInput = document.getElementById('personName');
 const generateBtn = document.getElementById('generateBtn');
 const statusEl = document.getElementById('status');
@@ -175,13 +177,18 @@ function renderCharacterGrid() {
 function renderTraits() {
   traitsEl.innerHTML = '';
   for (const feature of currentBoard.availableFeatures) {
+    const detected = detectedTraitIds.includes(feature.id);
+    let reason = feature.reason || '';
+    if (!feature.available && detected) {
+      reason = reason ? `${reason} — detected in photo, will be left out` : 'Detected in photo, will be left out';
+    }
     const label = document.createElement('label');
     label.className = 'switch' + (feature.available ? '' : ' switch-disabled');
-    label.title = feature.reason || '';
+    label.title = reason;
     label.innerHTML = `
-      <input type="checkbox" value="${feature.id}" ${feature.available ? '' : 'disabled'} />
+      <input type="checkbox" value="${feature.id}" ${feature.available ? '' : 'disabled'} ${feature.available && detected ? 'checked' : ''} />
       <span class="switch-track"></span>${escapeHtml(feature.label)}
-      ${feature.reason ? `<span class="switch-reason">${escapeHtml(feature.reason)}</span>` : ''}
+      ${reason ? `<span class="switch-reason">${escapeHtml(reason)}</span>` : ''}
     `;
     traitsEl.appendChild(label);
   }
@@ -198,13 +205,18 @@ document.getElementById('completeBoardBtn').addEventListener('click', async () =
 
 // --- Add a character (crop + traits + generate) ---
 
+// Detection only runs once the user explicitly confirms a crop (confirmCropBtn), not on
+// Cropper's default initial crop box — analyzing that produced bad results (see git history).
 async function autoDetectTraits(blob) {
   if (!currentBoard) return;
 
-  const form = new FormData();
-  form.append('image', blob, 'photo.png');
   statusEl.textContent = 'Detecting features…';
   statusEl.className = 'status';
+  addCharacterPanel.classList.add('busy');
+  addCharacterOverlay.classList.remove('hidden');
+
+  const form = new FormData();
+  form.append('image', blob, 'photo.png');
 
   try {
     const res = await fetch(`/api/boards/${currentBoard.id}/characters/detect-traits`, { method: 'POST', body: form });
@@ -212,14 +224,18 @@ async function autoDetectTraits(blob) {
     if (!res.ok) throw new Error(data.error || 'Feature detection failed');
 
     detectedTraitIds = data.traitIds || [];
-    for (const id of detectedTraitIds) {
-      const checkbox = traitsEl.querySelector(`input[value="${id}"]`);
-      if (checkbox && !checkbox.disabled) checkbox.checked = true;
-    }
     statusEl.textContent = '';
   } catch (err) {
     // Best-effort suggestion only — leave traits for manual selection if detection fails.
-    statusEl.textContent = '';
+    detectedTraitIds = [];
+    statusEl.textContent = `Couldn't auto-detect features (${err.message}) — pick them manually below.`;
+    statusEl.className = 'status error';
+  } finally {
+    addCharacterPanel.classList.remove('busy');
+    addCharacterOverlay.classList.add('hidden');
+    confirmCropBtn.classList.add('hidden');
+    featuresStep.classList.remove('hidden');
+    renderTraits();
   }
 }
 
@@ -234,6 +250,9 @@ fileInput.addEventListener('change', () => {
   statusEl.textContent = '';
   statusEl.className = 'status';
   detectedTraitIds = [];
+  featuresStep.classList.add('hidden');
+  confirmCropBtn.classList.remove('hidden');
+  confirmCropBtn.disabled = true;
 
   if (cropper) cropper.destroy();
   cropImage.onload = () => {
@@ -241,13 +260,22 @@ fileInput.addEventListener('change', () => {
       aspectRatio: 1,
       viewMode: 1,
       ready() {
-        generateBtn.disabled = false;
-        cropper.getCroppedCanvas({ width: 512, height: 512 })?.toBlob((blob) => {
-          if (blob) autoDetectTraits(blob);
-        }, 'image/png');
+        confirmCropBtn.disabled = false;
       },
     });
   };
+});
+
+confirmCropBtn.addEventListener('click', () => {
+  if (!cropper) return;
+
+  confirmCropBtn.disabled = true;
+  cropper.disable();
+
+  const canvas = cropper.getCroppedCanvas({ width: 512, height: 512 });
+  canvas.toBlob((blob) => {
+    if (blob) autoDetectTraits(blob);
+  }, 'image/png');
 });
 
 generateBtn.addEventListener('click', async () => {
@@ -287,6 +315,8 @@ generateBtn.addEventListener('click', async () => {
       fileInput.value = '';
       cropContainer.style.display = 'none';
       detectedTraitIds = [];
+      featuresStep.classList.add('hidden');
+      confirmCropBtn.classList.add('hidden');
       if (cropper) {
         cropper.destroy();
         cropper = null;

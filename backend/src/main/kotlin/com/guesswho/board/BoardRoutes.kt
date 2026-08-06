@@ -110,8 +110,9 @@ fun Route.boardRoutes(repository: Lazy<BoardRepository>, httpClient: HttpClient)
 
             post("/characters/detect-traits") {
                 val boardId = call.parameters["id"]!!
-                val board = repository.value.getBoard(boardId)
-                if (board == null) {
+                // Only used to 404 on a bad board id — detection itself considers the whole
+                // feature pool regardless of board availability, see the candidates line below.
+                if (repository.value.getBoard(boardId) == null) {
                     call.respond(HttpStatusCode.NotFound, mapOf("error" to "Board not found"))
                     return@post
                 }
@@ -139,8 +140,11 @@ fun Route.boardRoutes(repository: Lazy<BoardRepository>, httpClient: HttpClient)
                     return@post
                 }
 
-                val candidates = BoardBalancer.availableFeatures(board).filter { it.available }.map { it.feature }
-                when (val result = detectTraits(httpClient, apiKey, bytes, imageMime, candidates)) {
+                // The full pool, not just currently-available features: a detected-but-unavailable
+                // trait (e.g. the board already has enough hats) still needs to reach the client so
+                // it can be signaled to generatePortrait() as something to explicitly leave out —
+                // see the removeTraits diff in app.js's generateBtn handler.
+                when (val result = detectTraits(httpClient, apiKey, bytes, imageMime, DefaultFeaturePool.allFeatures())) {
                     is TraitDetectionResult.Failure -> call.respond(result.status, mapOf("error" to result.error))
                     is TraitDetectionResult.Success -> call.respond(mapOf("traitIds" to result.traitIds.toList()))
                 }
