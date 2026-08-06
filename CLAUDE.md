@@ -68,15 +68,17 @@ fix the checklist, don't quietly reinterpret the spec.
 
 ## Current architecture (see `.claude/context.md` for details)
 
-One Ktor service, no database, no auth, no frontend build step. A single
-`POST /api/transform` endpoint takes a cropped photo + a freeform list of
-trait strings and forwards them to Gemini's image-editing model in one
-shot — there's no concept of a board, a person, or feature balancing yet.
-An earlier version of this repo had a fuller MVP (React frontend + SQLite
-persistence, per `backend/data/` still being gitignored) that was
-deliberately trimmed back down to this minimal single-endpoint version;
-the roadmap in `.claude/current.md` is what rebuilds toward the full spec
-from here, not a resurrection of that old code.
+One Ktor service, Firestore for persistence, no auth, no frontend build
+step. Boards (name, category, target size, characters with traits/portrait)
+persist to Firestore and are driven by `BoardBalancer`/`DefaultFeaturePool`
+for feature availability, via `/api/boards/...` routes and the board
+list/detail UI. The original standalone `POST /api/transform` endpoint
+(freeform trait strings, no board, no persistence) still exists unchanged
+alongside it. An earlier version of this repo had a fuller MVP (React
+frontend + SQLite persistence, per `backend/data/` still being gitignored)
+that was deliberately trimmed back down to a minimal single-endpoint
+version and then rebuilt with boards + Firestore in a later session — see
+`.claude/current.md` for what's still open toward the full spec.
 
 ## Operational gotchas
 
@@ -107,16 +109,27 @@ from here, not a resurrection of that old code.
   board list doesn't do an N+1 read of every board's characters — kept in
   step by `FirestoreBoardRepository.addCharacter`, so if you add another
   write path for characters, update it there too.
-  - **Credentials**: the client (`FirestoreOptions.getDefaultInstance().service`)
-    uses application-default credentials — automatic on Cloud Run (the
-    runtime service account), but locally you need
-    `gcloud auth application-default login` first, or board routes fail.
-    It's built lazily (`Lazy<BoardRepository>` in `Application.kt`) so a
-    plain `/api/transform`-only local run still works without any GCP
+  - **Named database, not `(default)`**: `foodie-503510` already has a
+    `(default)` Firestore database in use by the unrelated `foodie` app, so
+    boards use a separate named database (`FIRESTORE_DATABASE_ID = "guess-who"`
+    in `Application.kt`, passed via `FirestoreOptions.newBuilder().setDatabaseId(...)`
+    — plain `getDefaultInstance()` would silently point at `foodie`'s
+    database instead). Firestore does **not** auto-create named databases;
+    it must exist before the app can use it — see `README.md`'s one-time
+    `gcloud firestore databases create --database=guess-who` step. If you
+    ever rename it, that constant and the `gcloud` command both need to
+    change together.
+  - **Credentials**: the client uses application-default credentials —
+    automatic on Cloud Run (the runtime service account), but locally you
+    need `gcloud auth application-default login` first, or board routes
+    fail. It's built lazily (`Lazy<BoardRepository>` in `Application.kt`)
+    so a plain `/api/transform`-only local run still works without any GCP
     setup at all.
   - **IAM**: the Cloud Run runtime service account needs
     `roles/datastore.user` on the project (one-time `gcloud` grant, same
     pattern as the `GEMINI_API_KEY` Secret Manager grant in `README.md`).
+    That role is project-wide and covers every database in the project, so
+    it doesn't need a separate grant per database.
   - **`ApiFuture` vs. Guava's `ListenableFuture`**: Firestore's Java client
     returns `com.google.api.core.ApiFuture`, which `kotlinx-coroutines-guava`'s
     `.await()` does *not* accept (it's not a `ListenableFuture`, despite
