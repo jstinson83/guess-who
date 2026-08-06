@@ -76,6 +76,19 @@ class BoardRoutesTest {
     }
 
     @Test
+    fun `fetching a portrait for a character with none returns 404`() = testApplication {
+        application { installBoardRoutes() }
+
+        val createResponse = client.post("/api/boards") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"name":"The Smiths","targetSize":12}""")
+        }
+        val id = Json.parseToJsonElement(createResponse.bodyAsText()).jsonObject.getValue("id").jsonPrimitive.content
+
+        assertEquals(HttpStatusCode.NotFound, client.get("/api/boards/$id/characters/does-not-exist/portrait").status)
+    }
+
+    @Test
     fun `listing boards reflects created boards`() = testApplication {
         application { installBoardRoutes() }
 

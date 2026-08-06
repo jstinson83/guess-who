@@ -4,6 +4,8 @@ import com.google.cloud.firestore.DocumentSnapshot
 import com.google.cloud.firestore.Firestore
 import com.google.cloud.firestore.Query
 import com.google.cloud.firestore.QueryDocumentSnapshot
+import com.guesswho.storage.PortraitStore
+import com.guesswho.storage.StoredPortrait
 import java.time.Instant
 
 /**
@@ -14,10 +16,21 @@ import java.time.Instant
  *
  * `characterCount` is denormalized onto the board document (kept in step by [addCharacter]) so
  * [listBoards] can render progress ("3/12") without an N+1 read of every board's characters.
+ *
+ * Portrait image bytes live in [portraitStore] (Cloud Storage), not inline on the Firestore
+ * document — a data-URL-sized image can exceed Firestore's 1 MiB per-document cap. The document
+ * only stores [Character.hasPortrait]; the object name is derived deterministically from the
+ * board and character ids (see [portraitObjectName]) rather than stored, so there's nothing to
+ * keep in sync.
  */
-class FirestoreBoardRepository(private val db: Firestore) : BoardRepository {
+class FirestoreBoardRepository(
+    private val db: Firestore,
+    private val portraitStore: PortraitStore,
+) : BoardRepository {
 
     private val boards = db.collection("boards")
+
+    private fun portraitObjectName(boardId: String, characterId: String) = "boards/$boardId/characters/$characterId"
 
     override suspend fun createBoard(name: String, targetSize: Int): BoardState {
         val ref = boards.document()
@@ -63,7 +76,7 @@ class FirestoreBoardRepository(private val db: Firestore) : BoardRepository {
         boardId: String,
         name: String,
         traits: Set<String>,
-        portraitDataUrl: String?,
+        portrait: StoredPortrait?,
     ): BoardState? {
         val boardRef = boards.document(boardId)
         if (!boardRef.get().await().exists()) return null
@@ -72,11 +85,18 @@ class FirestoreBoardRepository(private val db: Firestore) : BoardRepository {
         val position = charactersRef.get().await().size()
         val now = Instant.now().toString()
 
-        charactersRef.document().set(
+        // Allocated up front (rather than letting .set() assign an id) so the object name below
+        // can be derived from it before the Firestore write happens.
+        val characterRef = charactersRef.document()
+        if (portrait != null) {
+            portraitStore.upload(portraitObjectName(boardId, characterRef.id), portrait)
+        }
+
+        characterRef.set(
             mapOf(
                 "name" to name,
                 "traits" to traits.toList(),
-                "portraitDataUrl" to portraitDataUrl,
+                "hasPortrait" to (portrait != null),
                 "position" to position.toLong(),
                 "createdAt" to now,
             ),
@@ -91,6 +111,9 @@ class FirestoreBoardRepository(private val db: Firestore) : BoardRepository {
 
         return getBoard(boardId)
     }
+
+    override suspend fun getCharacterPortrait(boardId: String, characterId: String): StoredPortrait? =
+        portraitStore.fetch(portraitObjectName(boardId, characterId))
 
     override suspend fun completeBoard(id: String): BoardState? {
         val boardRef = boards.document(id)
@@ -129,7 +152,7 @@ class FirestoreBoardRepository(private val db: Firestore) : BoardRepository {
         id = id,
         traits = (get("traits") as? List<*>)?.filterIsInstance<String>()?.toSet() ?: emptySet(),
         name = getString("name") ?: "",
-        portraitDataUrl = getString("portraitDataUrl"),
+        hasPortrait = getBoolean("hasPortrait") ?: false,
     )
 
     private fun parseStatus(raw: String?): BoardStatus =

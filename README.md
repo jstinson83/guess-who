@@ -3,21 +3,25 @@
 Create a board for a group (family, friends, office, ...), then add people to
 it one photo at a time: crop the photo, pick from a real feature pool
 (glasses, hat, beard, ...), and Gemini generates a stylized cartoon portrait.
-Boards persist in Firestore and can be reloaded in-progress or complete.
+Boards persist in Firestore; portrait images themselves live in Cloud
+Storage, referenced from the Firestore character document. Boards can be
+reloaded in-progress or complete.
 
 ## Run it
 
 ```bash
 cd backend
 export GEMINI_API_KEY=your-key-here
-gcloud auth application-default login   # only needed once per machine, for Firestore
+gcloud auth application-default login   # only needed once per machine, for Firestore + GCS
 ./gradlew run
 ```
 
 Open http://localhost:8080. `GEMINI_API_KEY` is required for any portrait
-generation (standalone or board add-character). Firestore access
-(application-default credentials, see above) is only needed once you hit a
-`/api/boards/...` route — the app starts fine without it.
+generation (standalone or board add-character). Firestore and Cloud Storage
+access (application-default credentials, see above — your own account needs
+`roles/datastore.user` and `roles/storage.objectAdmin` on the bucket for
+local dev to work) is only needed once you hit a `/api/boards/...` route —
+the app starts fine without it.
 
 ## How it's built
 
@@ -33,7 +37,12 @@ generation (standalone or board add-character). Firestore access
   `DefaultFeaturePool.kt`), the Firestore-backed persistence
   (`BoardRepository.kt`, `FirestoreBoardRepository.kt`), and the board HTTP
   routes (`BoardRoutes.kt`) — `POST/GET /api/boards`, `GET /api/boards/{id}`,
-  `POST /api/boards/{id}/characters`, `POST /api/boards/{id}/complete`.
+  `POST /api/boards/{id}/characters`, `POST /api/boards/{id}/complete`,
+  `GET /api/boards/{id}/characters/{characterId}/portrait`.
+- `backend/src/main/kotlin/com/guesswho/storage/PortraitStore.kt` — the
+  Cloud Storage-backed portrait image store (`GcsPortraitStore`), used by
+  `FirestoreBoardRepository` to upload a generated portrait's bytes and
+  fetch them back for the portrait route above.
 - `backend/src/main/resources/static/` — the whole frontend: `index.html` +
   `app.js` (board list/create view and board detail/add-character view,
   hash-routed at `#/board/<id>`), a
@@ -96,7 +105,35 @@ One-time setup (not automated — do this once in the GCP project):
      --role="roles/datastore.user"
    ```
 
-5. **Create the Cloud Build trigger** on push to `main`:
+5. **Create the Cloud Storage bucket** portraits are stored in (Firestore
+   documents are too small to hold full portrait images inline — see
+   `CLAUDE.md`). Bucket names are globally unique across all of GCP, not just
+   this project, hence the project-id prefix:
+   ```bash
+   gcloud storage buckets create gs://foodie-503510-guess-who-portraits \
+     --project=foodie-503510 \
+     --location=northamerica-northeast1 \
+     --uniform-bucket-level-access
+   ```
+   (Same region as the Firestore database/Cloud Run service above, though
+   unlike Firestore's database location this isn't load-bearing — just kept
+   consistent. If you use a different bucket name, update `PORTRAIT_BUCKET`
+   in `Application.kt` to match.)
+
+6. **Grant the Cloud Run runtime service account access to that bucket**
+   (scoped to the bucket itself, not project-wide, since `storage.admin` at
+   the project level would also reach the unrelated `foodie` app's buckets):
+   ```bash
+   gcloud storage buckets add-iam-policy-binding gs://foodie-503510-guess-who-portraits \
+     --member="serviceAccount:PROJECT_NUMBER-compute@developer.gserviceaccount.com" \
+     --role="roles/storage.objectAdmin"
+   ```
+   Portraits are never made public — the server fetches them from the
+   bucket with these credentials and streams the bytes back
+   (`GET /api/boards/{id}/characters/{characterId}/portrait`), so no
+   `allUsers`/`allAuthenticatedUsers` binding is needed or wanted.
+
+7. **Create the Cloud Build trigger** on push to `main`:
    ```bash
    gcloud builds triggers create github \
      --project=foodie-503510 \
