@@ -29,18 +29,30 @@ precisely, and what bit us before."
 
 ## Architecture at a glance
 
-- **Backend**: Kotlin + Ktor, single service (`backend/`), one route file
-  (`Application.kt`).
-- **AI**: Gemini's image-editing model, called once per portrait request —
-  the photo plus a freeform list of trait strings goes in, one stylized
-  cartoon image comes back. No multi-turn conversation, no comparison
-  against other portraits.
-- **Storage**: none. Nothing is persisted server-side; each request is
-  independent and stateless. (An earlier version of this repo had SQLite
-  persistence — see Decisions below — that's gone today, not just unused.)
+- **Backend**: Kotlin + Ktor, single service (`backend/`). Routes are split
+  by concern: `Application.kt` (server setup + `/api/transform`) and
+  `board/BoardRoutes.kt` (`/api/boards/...`).
+- **AI**: Gemini's image-editing model, called once per portrait request via
+  the shared `generatePortrait()` helper (`Gemini.kt`) — a photo plus a list
+  of trait phrases goes in, one stylized cartoon image comes back. No
+  multi-turn conversation, no comparison against other portraits. Used by
+  both the standalone `/api/transform` endpoint and the board add-character
+  flow, so the prompt lives in exactly one place.
+- **Storage**: Firestore (Native mode), via `com.google.cloud:google-cloud-firestore`
+  and application-default credentials — no ORM, plain client calls behind a
+  `BoardRepository` interface (`board/BoardRepository.kt`,
+  `FirestoreBoardRepository.kt`). One `boards` collection; each board's
+  characters live in a `characters` subcollection underneath it. See
+  `CLAUDE.md` for the schema, the ADC/IAM setup this requires, and the
+  Firestore-specific gotchas (`ApiFuture` vs. Guava's `ListenableFuture`,
+  the 1 MiB document-size limit on inline portrait images).
 - **Frontend**: one static HTML page (`backend/src/main/resources/static/index.html`)
-  with vendored `Cropper.js` for the crop UI, served directly by Ktor's
-  `staticResources` — no framework, no build step, no CDN dependency.
+  plus `app.js` (view logic) and vendored `Cropper.js` for the crop UI,
+  served directly by Ktor's `staticResources` — no framework, no build
+  step, no CDN dependency. Two views toggled by a `#/board/<id>` hash
+  route: a board list/create view, and a board detail view (character
+  grid + add-a-character flow). This replaced the old single-page
+  freeform-trait upload UI described in "Decisions" below.
 - **Deploy**: Cloud Build (`cloudbuild.yaml`) → Artifact Registry → Cloud
   Run, triggered on push to `main`. Full one-time setup steps are in
   `README.md`, not duplicated here.
@@ -60,38 +72,64 @@ precisely, and what bit us before."
   `northamerica-northeast1`. Same GCP project as the unrelated `foodie`
   repo (shared Artifact Registry repo `cloud-run-source-deploy`, separate
   Cloud Run services) — see `CLAUDE.md` for why that's not a problem.
+  Firestore (Native mode) lives in the same project; the Cloud Run runtime
+  service account needs the `roles/datastore.user` IAM role — see
+  `README.md`'s one-time setup section.
 
 ## Major features (as of last update)
 
-- Single-page upload flow: pick a photo, crop it client-side with
-  Cropper.js, check boxes for a freeform set of traits (glasses,
-  mustache, hat, ...), submit.
-- `POST /api/transform` (`Application.kt`): accepts the cropped photo
-  (multipart file part) plus a JSON-encoded list of trait strings (form
-  field `traits`), builds a single prompt instructing Gemini to redraw the
-  photo as a "bold, flat-color cartoon illustration" with those traits
-  applied while keeping the person recognizable and the framing/background
-  unchanged, and returns the resulting image as a base64 data URL.
-- No board, no multi-person comparison, no feature balancing, no
-  persistence, no game generation — all of that is roadmap work, not yet
-  started. See `current.md`.
+- **Board persistence** (Firestore): create a board (name, category,
+  target size), add characters to it one photo at a time, and reload it
+  later by URL (`#/board/<id>`) — in-progress or complete. `BoardRepository`
+  (`board/BoardRepository.kt`) is the storage interface;
+  `FirestoreBoardRepository` is the only implementation so far. Route
+  handlers in `board/BoardRoutes.kt`:
+  `POST /api/boards`, `GET /api/boards`, `GET /api/boards/{id}`,
+  `POST /api/boards/{id}/characters`, `POST /api/boards/{id}/complete`.
+- **Structured feature pool, actually wired up**: the add-character UI
+  renders `DefaultFeaturePool`'s real feature list (not freeform text),
+  with `BoardBalancer.availableFeatures` disabling features that have hit
+  their target for the board and showing why — this is the spec's step-3
+  "Available / Unavailable" example, now live. `BoardBalancer`/
+  `DefaultFeaturePool` themselves predate this change (were already built
+  and tested) but had no caller until this session.
+- Board list + create-board UI, board detail UI (character grid,
+  add-a-character flow reusing the Cropper.js crop step) —
+  `static/index.html` + `static/app.js`. This replaced the old single-page
+  freeform-trait upload UI as the app's front door.
+- `POST /api/transform` (`Application.kt`): unchanged standalone endpoint —
+  accepts a cropped photo plus a JSON-encoded list of trait strings and
+  returns one Gemini-generated cartoon portrait, no board involved. Kept
+  for quick manual testing; the frontend no longer calls it (board
+  add-character goes through `/api/boards/{id}/characters` instead, which
+  calls the same shared `generatePortrait()` helper).
+- No board-quality analysis, no game generation yet — see `current.md`.
 
 ## Decisions / things already considered
 
 - The repo previously had a fuller MVP — a Ktor backend plus a React
   frontend with SQLite persistence (`backend/data/` is still gitignored
-  from that era) — which was deliberately trimmed down to today's minimal
+  from that era) — which was deliberately trimmed down to a minimal
   single-page, single-endpoint version ("Trim to a single-page
-  Gemini-based portrait generator"). The roadmap in `current.md` rebuilds
-  toward the full spec from this minimal base; it is not a plan to restore
-  the old React/SQLite code, since the intervening trim was a deliberate
-  simplification, not an accident.
-- The trait list on the current upload form is freeform/unconstrained —
-  there's no feature pool, no balancing, and nothing stopping the same
-  trait from being picked for every portrait. This matches the spec's
-  "step 2" (first photo, all features unlocked) but doesn't yet implement
-  "step 3" (constraining choices against the rest of the board), since
-  there's no board for a choice to be constrained against yet.
+  Gemini-based portrait generator"), then rebuilt back up with boards in
+  this session. This is not a restoration of the old React/SQLite code —
+  new frontend (vanilla JS, no framework) and new storage (Firestore, not
+  SQLite).
+- **Firestore over SQLite/Postgres**: chosen because Cloud Run's local
+  disk isn't durable across redeploys/instance churn (ruling out a plain
+  SQLite file, which is how the old MVP persisted), and Cloud SQL/Postgres
+  was more infra than this session needed — Firestore was already enabled
+  on the GCP project and required no additional setup beyond IAM. See
+  `CLAUDE.md` for the schema and gotchas.
+- **Portrait images stored inline** as base64 data URLs on the Firestore
+  character document, not in Cloud Storage. Simplest option and fine at
+  today's portrait sizes, but Firestore documents cap at 1 MiB total —
+  see the `CLAUDE.md` gotcha. Revisit with Cloud Storage + a URL field if
+  that ever gets hit.
+- The old single-page upload form's freeform trait checkboxes are gone —
+  the add-character flow now uses the real feature pool. `/api/transform`
+  itself is untouched and still accepts freeform trait strings, since
+  nothing about that endpoint's contract needed to change.
 
 ## Maintenance
 

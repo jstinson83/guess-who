@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Guess Who Portrait Generator</title>
+  <title>Guess Who Boards</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -12,100 +12,70 @@
 </head>
 <body>
   <main>
-    <h1>Guess Who Portrait Generator</h1>
-    <p class="subtitle">Upload a photo, crop it, pick a few traits, and let Gemini turn it into a cartoon portrait.</p>
+    <!-- Board list -->
+    <section id="boardListView">
+      <h1>Guess Who Boards</h1>
+      <p class="subtitle">Create a board for your group, then add people to it one photo at a time.</p>
 
-    <section>
-      <label class="field-label" for="fileInput">1. Choose a photo</label>
-      <input type="file" id="fileInput" accept="image/*" />
-      <div id="cropContainer"><img id="cropImage" alt="" /></div>
-    </section>
-
-    <section>
-      <label class="field-label">2. Pick a few traits</label>
-      <label class="field-hint">Every portrait is drawn as a cartoon automatically — these are optional extra touches.</label>
-      <div class="traits" id="traits">
-        <label class="switch"><input type="checkbox" value="add glasses" /><span class="switch-track"></span>Glasses</label>
-        <label class="switch"><input type="checkbox" value="add sunglasses" /><span class="switch-track"></span>Sunglasses</label>
-        <label class="switch"><input type="checkbox" value="add a hat" /><span class="switch-track"></span>Hat</label>
-        <label class="switch"><input type="checkbox" value="add a mustache" /><span class="switch-track"></span>Mustache</label>
-        <label class="switch"><input type="checkbox" value="add a beard" /><span class="switch-track"></span>Beard</label>
-        <label class="switch"><input type="checkbox" value="give them long hair" /><span class="switch-track"></span>Long hair</label>
-        <label class="switch"><input type="checkbox" value="give them curly hair" /><span class="switch-track"></span>Curly hair</label>
-        <label class="switch"><input type="checkbox" value="give them a bigger nose" /><span class="switch-track"></span>Big nose</label>
-        <label class="switch"><input type="checkbox" value="give them freckles" /><span class="switch-track"></span>Freckles</label>
-        <label class="switch"><input type="checkbox" value="add earrings" /><span class="switch-track"></span>Earrings</label>
+      <div class="panel">
+        <label class="field-label" for="newBoardName">Create a board</label>
+        <div class="new-board-form">
+          <input type="text" id="newBoardName" placeholder="Board name (e.g. The Smiths)" />
+          <select id="newBoardCategory">
+            <option>Family</option>
+            <option>Friends</option>
+            <option>Office</option>
+            <option>Classroom</option>
+            <option>Sports team</option>
+            <option>Custom</option>
+          </select>
+          <input type="number" id="newBoardTargetSize" value="24" min="2" max="64" title="Target number of characters" />
+          <button id="createBoardBtn">Create board</button>
+        </div>
+        <div id="createBoardStatus" class="status"></div>
       </div>
+
+      <div id="boardList" class="board-list"></div>
     </section>
 
-    <section>
-      <button id="generateBtn" disabled>Generate portrait</button>
-      <div id="status"></div>
-      <img id="resultImg" alt="Generated portrait" />
+    <!-- Board detail -->
+    <section id="boardDetailView" class="hidden">
+      <button class="link-btn" id="backToListBtn">&larr; All boards</button>
+      <div class="board-header">
+        <div>
+          <h1 id="boardName"></h1>
+          <p class="subtitle" id="boardMeta"></p>
+        </div>
+        <button id="completeBoardBtn">Mark board complete</button>
+      </div>
+
+      <div class="panel">
+        <label class="field-label">Characters on this board</label>
+        <div id="characterGrid" class="character-grid"></div>
+      </div>
+
+      <div class="panel" id="addCharacterPanel">
+        <label class="field-label">Add a character</label>
+
+        <label class="field-label" for="personName">1. Their name</label>
+        <input type="text" id="personName" placeholder="e.g. Jordan" />
+
+        <label class="field-label" for="fileInput">2. Choose a photo</label>
+        <input type="file" id="fileInput" accept="image/*" />
+        <div id="cropContainer"><img id="cropImage" alt="" /></div>
+
+        <label class="field-label">3. Pick features</label>
+        <label class="field-hint">Features already at their target for this board are greyed out.</label>
+        <div class="traits" id="traits"></div>
+
+        <button id="generateBtn" disabled>Generate portrait &amp; add to board</button>
+        <div id="status" class="status"></div>
+        <img id="resultImg" alt="Generated portrait" />
+      </div>
     </section>
   </main>
 
   <script src="/vendor/cropper.min.js"></script>
-  <script>
-    const fileInput = document.getElementById('fileInput');
-    const cropContainer = document.getElementById('cropContainer');
-    const cropImage = document.getElementById('cropImage');
-    const generateBtn = document.getElementById('generateBtn');
-    const statusEl = document.getElementById('status');
-    const resultImg = document.getElementById('resultImg');
-
-    let cropper = null;
-
-    fileInput.addEventListener('change', () => {
-      const file = fileInput.files[0];
-      if (!file) return;
-
-      const url = URL.createObjectURL(file);
-      cropImage.src = url;
-      cropContainer.style.display = 'block';
-      resultImg.style.display = 'none';
-      statusEl.textContent = '';
-      statusEl.className = '';
-
-      if (cropper) cropper.destroy();
-      cropImage.onload = () => {
-        cropper = new Cropper(cropImage, { aspectRatio: 1, viewMode: 1 });
-        generateBtn.disabled = false;
-      };
-    });
-
-    generateBtn.addEventListener('click', async () => {
-      if (!cropper) return;
-
-      const traits = Array.from(document.querySelectorAll('#traits input:checked')).map((el) => el.value);
-
-      const canvas = cropper.getCroppedCanvas({ width: 768, height: 768 });
-      canvas.toBlob(async (blob) => {
-        const form = new FormData();
-        form.append('image', blob, 'photo.png');
-        form.append('traits', JSON.stringify(traits));
-
-        generateBtn.disabled = true;
-        statusEl.textContent = 'Generating…';
-        statusEl.className = '';
-        resultImg.style.display = 'none';
-
-        try {
-          const res = await fetch('/api/transform', { method: 'POST', body: form });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error || 'Request failed');
-
-          resultImg.src = data.image;
-          resultImg.style.display = 'block';
-          statusEl.textContent = 'Done.';
-        } catch (err) {
-          statusEl.textContent = err.message;
-          statusEl.className = 'error';
-        } finally {
-          generateBtn.disabled = false;
-        }
-      }, 'image/png');
-    });
-  </script>
+  <script src="/app.js"></script>
 </body>
 </html>

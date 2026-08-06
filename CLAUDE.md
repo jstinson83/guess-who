@@ -95,8 +95,37 @@ from here, not a resurrection of that old code.
   same project, not the same deploy. `GEMINI_API_KEY` is a Secret Manager
   secret read at deploy time, not baked into the image.
 - **Frontend has no build step**: `backend/src/main/resources/static/` is
-  served directly (`index.html`, `styles.css`, vendored `Cropper.js` — no
-  CDN dependency). Any new frontend work should keep this pattern unless
-  the roadmap work (e.g. a real board-management UI) makes a lightweight
-  build step clearly worth it — don't introduce a framework/bundler for a
-  small change.
+  served directly (`index.html`, `app.js`, `styles.css`, vendored
+  `Cropper.js` — no CDN dependency). Any new frontend work should keep
+  this pattern unless the roadmap work makes a lightweight build step
+  clearly worth it — don't introduce a framework/bundler for a small
+  change.
+- **Firestore persistence**: boards live in a `boards` collection; each
+  board's characters live in a `characters` subcollection underneath it
+  (not a top-level collection), since every read pattern is scoped to one
+  board. `characterCount` is denormalized onto the board document so the
+  board list doesn't do an N+1 read of every board's characters — kept in
+  step by `FirestoreBoardRepository.addCharacter`, so if you add another
+  write path for characters, update it there too.
+  - **Credentials**: the client (`FirestoreOptions.getDefaultInstance().service`)
+    uses application-default credentials — automatic on Cloud Run (the
+    runtime service account), but locally you need
+    `gcloud auth application-default login` first, or board routes fail.
+    It's built lazily (`Lazy<BoardRepository>` in `Application.kt`) so a
+    plain `/api/transform`-only local run still works without any GCP
+    setup at all.
+  - **IAM**: the Cloud Run runtime service account needs
+    `roles/datastore.user` on the project (one-time `gcloud` grant, same
+    pattern as the `GEMINI_API_KEY` Secret Manager grant in `README.md`).
+  - **`ApiFuture` vs. Guava's `ListenableFuture`**: Firestore's Java client
+    returns `com.google.api.core.ApiFuture`, which `kotlinx-coroutines-guava`'s
+    `.await()` does *not* accept (it's not a `ListenableFuture`, despite
+    looking like one). Don't add that dependency expecting it to bridge
+    Firestore calls — use the local `ApiFuture<T>.await()` extension in
+    `board/ApiFutureAwait.kt` instead.
+  - **1 MiB document-size limit**: portrait images are stored inline as
+    base64 data URLs on the character document. Fine at today's portrait
+    sizes, but if Gemini output grows (larger crops, a different model) a
+    character document can exceed Firestore's per-document cap. If that
+    ever happens, move portraits to Cloud Storage and store a URL instead
+    of the data URL — don't try to chunk/compress around the limit.

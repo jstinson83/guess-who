@@ -23,35 +23,45 @@ spec, not a maintainer commitment.
 
 ### Boards (replace the current stateless single-photo flow)
 
-- [ ] Persist boards: name + category (Family/Friends/Office/Classroom/
+- [x] Persist boards: name + category (Family/Friends/Office/Classroom/
       Sports team/Custom) + the list of people/portraits on it
-- [ ] "Create Board" flow (choose category, name it)
-- [ ] Persist each generated portrait against a board instead of
+      (Firestore; `board/BoardRepository.kt` + `FirestoreBoardRepository.kt`)
+- [x] "Create Board" flow (choose category, name it)
+- [x] Persist each generated portrait against a board instead of
       returning it directly to the client and forgetting it
 
 ### Feature pool (replace the current freeform trait checkboxes)
 
-- [ ] Encode the spec's actual feature pool (Accessories, Hair, Face,
-      Facial Hair, Clothing) as structured data instead of freeform trait
-      strings
-- [ ] First-photo-on-a-board flow: full feature pool unlocked, matching
+- [x] Encode the spec's actual feature pool as structured data instead of
+      freeform trait strings (`DefaultFeaturePool`, wired into the
+      add-character UI)
+- [x] First-photo-on-a-board flow: full feature pool unlocked, matching
       today's UX but against the real pool
 
 ### Balanced additions
 
-- [ ] Track per-board feature usage as people are added
-- [ ] Compute available vs. unavailable features for each new upload,
-      with a reason shown for unavailable ones ("too many characters
-      already use glasses", "already at target distribution", "would
-      duplicate another character")
-- [ ] Enforce those constraints in the upload UI (only offer available
-      features)
+- [x] Track per-board feature usage as people are added
+- [x] Compute available vs. unavailable features for each new upload,
+      with a reason shown for unavailable ones (`BoardBalancer.availableFeatures`,
+      surfaced in the add-character checkboxes)
+- [x] Enforce those constraints in the upload UI (only offer available
+      features) — unavailable ones are shown disabled with their reason,
+      not hidden, per the spec's example
 
 ### Balancing math
 
-- [ ] Compute target yes/no distribution per feature from board size
+- [x] Compute target yes/no distribution per feature from board size
       (e.g. the 24-player glasses/hat/beard/long-hair example in the spec)
-- [ ] Feed those targets into the "available vs. unavailable" logic above
+- [x] Feed those targets into the "available vs. unavailable" logic above
+
+### Not yet done from this pass
+
+- [ ] `/api/boards/{id}/characters` has no route test (it calls Gemini
+      directly); only manually verified via a mocked browser session —
+      see `CLAUDE.md` operational gotchas
+- [ ] No UI affordance yet for board quality/analysis (star rating,
+      average guesses, etc.) — that's the separate "Board analysis"
+      section below
 
 ### Board analysis
 
