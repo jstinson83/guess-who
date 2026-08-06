@@ -38,11 +38,14 @@ precisely, and what bit us before."
   background replaced with a plain color). Used by both the standalone
   `/api/transform` endpoint and the board add-character flow, so the prompt
   lives in exactly one place. `detectTraits()` (`board/TraitDetection.kt`,
-  board-only) — a photo plus the board's currently-available feature list
-  goes in, a JSON list of which of those features are visually present
-  comes back, used to pre-check the add-character feature boxes before the
-  user confirms/edits and generates. Both are single-shot: no multi-turn
-  conversation, no comparison against other portraits.
+  board-only, takes a candidate `List<FeatureDef>` so it isn't itself
+  board-aware) — a photo plus a feature list goes in, a JSON list of which
+  of those features are visually present comes back. The add-character
+  route calls it with the *entire* pool (`DefaultFeaturePool.allFeatures()`),
+  not just this board's available features, so a detected-but-unavailable
+  trait can still flow through as an explicit removal signal — see the
+  "Major features" entry below. Both call sites are single-shot: no
+  multi-turn conversation, no comparison against other portraits.
 - **Storage**: Firestore (Native mode), via `com.google.cloud:google-cloud-firestore`
   and application-default credentials — no ORM, plain client calls behind a
   `BoardRepository` interface (`board/BoardRepository.kt`,
@@ -117,14 +120,23 @@ precisely, and what bit us before."
   add-a-character flow reusing the Cropper.js crop step) —
   `static/index.html` + `static/app.js`. This replaced the old single-page
   freeform-trait upload UI as the app's front door.
-- Add-character flow auto-detects visible traits right after cropping
-  (`POST /api/boards/{id}/characters/detect-traits`, calls `detectTraits()`)
-  and pre-checks the matching feature boxes — still editable before the
-  user hits generate. Unchecking a detected trait tells `generatePortrait()`
-  to explicitly leave it out (`removeTraits` field), rather than only ever
-  layering requested traits on top of whatever the photo already shows.
-  A loading spinner/greyed-out panel covers both the detection call and
-  the final generate call.
+- Add-character flow is wizard-gated: the feature checklist (step 3) stays
+  hidden until the user explicitly confirms their crop (`confirmCropBtn`,
+  which also calls `cropper.disable()` to lock it in) — detection must not
+  run against Cropper's un-adjusted default crop box, which is what an
+  earlier version of this did and got visibly bad results from. Confirming
+  triggers `POST /api/boards/{id}/characters/detect-traits`
+  (`detectTraits()`) against the *entire* feature pool (not just this
+  board's currently-available features), which pre-checks the matching
+  available boxes — still editable before generate. A detected trait that's
+  unavailable for this board (e.g. hats already at target) can't be
+  checked, so it falls out of the client's checked-vs-detected diff
+  automatically and is sent as `removeTraits`, telling `generatePortrait()`
+  to explicitly draw the portrait *without* that feature rather than
+  leaving whatever the photo shows untouched; the UI also surfaces this to
+  the user via the feature's disabled-reason text. A loading
+  spinner/greyed-out panel covers both the detection call and the final
+  generate call.
 - `POST /api/transform` (`Application.kt`): unchanged standalone endpoint —
   accepts a cropped photo plus a JSON-encoded list of trait strings and
   returns one Gemini-generated cartoon portrait, no board involved. Kept
