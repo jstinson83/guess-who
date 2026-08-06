@@ -19,7 +19,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 @Serializable
-data class CreateBoardRequest(val name: String, val category: String, val targetSize: Int)
+data class CreateBoardRequest(val name: String, val targetSize: Int)
 
 @Serializable
 data class CharacterDto(val id: String, val name: String, val traits: List<String>, val portraitDataUrl: String?)
@@ -42,7 +42,6 @@ data class FeatureAvailabilityDto(val id: String, val label: String, val availab
 data class BoardDetailDto(
     val id: String,
     val name: String,
-    val category: String,
     val targetSize: Int,
     val status: String,
     val characters: List<CharacterDto>,
@@ -54,7 +53,6 @@ data class BoardDetailDto(
 data class BoardSummaryDto(
     val id: String,
     val name: String,
-    val category: String,
     val targetSize: Int,
     val characterCount: Int,
     val status: String,
@@ -78,7 +76,7 @@ fun Route.boardRoutes(repository: Lazy<BoardRepository>, httpClient: HttpClient)
                 return@post
             }
 
-            val board = repository.value.createBoard(request.name, request.category, request.targetSize)
+            val board = repository.value.createBoard(request.name, request.targetSize)
             call.respond(HttpStatusCode.Created, board.toDetailDto())
         }
 
@@ -166,7 +164,6 @@ fun Route.boardRoutes(repository: Lazy<BoardRepository>, httpClient: HttpClient)
 private fun BoardState.toDetailDto() = BoardDetailDto(
     id = id,
     name = name,
-    category = category,
     targetSize = targetSize,
     status = status.name,
     characters = characters.map { CharacterDto(it.id, it.name, it.traits.toList(), it.portraitDataUrl) },
@@ -186,4 +183,4 @@ private fun BoardState.toDetailDto() = BoardDetailDto(
     },
 )
 
-private fun BoardSummary.toDto() = BoardSummaryDto(id, name, category, targetSize, characterCount, status.name, updatedAt)
+private fun BoardSummary.toDto() = BoardSummaryDto(id, name, targetSize, characterCount, status.name, updatedAt)

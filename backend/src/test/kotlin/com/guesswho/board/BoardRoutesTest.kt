@@ -42,7 +42,7 @@ class BoardRoutesTest {
 
         val createResponse = client.post("/api/boards") {
             contentType(ContentType.Application.Json)
-            setBody("""{"name":"The Smiths","category":"Family","targetSize":12}""")
+            setBody("""{"name":"The Smiths","targetSize":12}""")
         }
         assertEquals(HttpStatusCode.Created, createResponse.status)
         val created = Json.parseToJsonElement(createResponse.bodyAsText()).jsonObject
@@ -63,7 +63,7 @@ class BoardRoutesTest {
 
         val response = client.post("/api/boards") {
             contentType(ContentType.Application.Json)
-            setBody("""{"name":"","category":"Family","targetSize":12}""")
+            setBody("""{"name":"","targetSize":12}""")
         }
         assertEquals(HttpStatusCode.BadRequest, response.status)
     }
@@ -81,7 +81,7 @@ class BoardRoutesTest {
 
         client.post("/api/boards") {
             contentType(ContentType.Application.Json)
-            setBody("""{"name":"Office","category":"Office","targetSize":16}""")
+            setBody("""{"name":"Office","targetSize":16}""")
         }
 
         val listResponse = client.get("/api/boards")
@@ -95,7 +95,7 @@ class BoardRoutesTest {
 
         val createResponse = client.post("/api/boards") {
             contentType(ContentType.Application.Json)
-            setBody("""{"name":"Classroom","category":"Classroom","targetSize":20}""")
+            setBody("""{"name":"Classroom","targetSize":20}""")
         }
         val id = Json.parseToJsonElement(createResponse.bodyAsText()).jsonObject.getValue("id").jsonPrimitive.content
 

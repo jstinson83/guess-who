@@ -7,7 +7,7 @@ package com.guesswho.board
  * layers on top — without a second read.
  */
 interface BoardRepository {
-    suspend fun createBoard(name: String, category: String, targetSize: Int): BoardState
+    suspend fun createBoard(name: String, targetSize: Int): BoardState
 
     suspend fun listBoards(): List<BoardSummary>
 

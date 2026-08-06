@@ -63,7 +63,7 @@ async function showBoardList() {
       card.href = `#/board/${board.id}`;
       card.innerHTML = `
         <div class="board-card-name">${escapeHtml(board.name)}</div>
-        <div class="board-card-meta">${escapeHtml(board.category)} · ${board.characterCount}/${board.targetSize} characters</div>
+        <div class="board-card-meta">${board.characterCount}/${board.targetSize} characters</div>
         <span class="badge badge-${board.status.toLowerCase()}">${board.status === 'COMPLETE' ? 'Complete' : 'In progress'}</span>
       `;
       boardList.appendChild(card);
@@ -75,7 +75,6 @@ async function showBoardList() {
 
 document.getElementById('createBoardBtn').addEventListener('click', async () => {
   const name = document.getElementById('newBoardName').value.trim();
-  const category = document.getElementById('newBoardCategory').value;
   const targetSize = parseInt(document.getElementById('newBoardTargetSize').value, 10);
 
   if (!name) {
@@ -91,7 +90,7 @@ document.getElementById('createBoardBtn').addEventListener('click', async () => 
     const res = await fetch('/api/boards', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, category, targetSize }),
+      body: JSON.stringify({ name, targetSize }),
     });
     const board = await res.json();
     if (!res.ok) throw new Error(board.error || 'Failed to create board');
@@ -135,7 +134,7 @@ async function showBoardDetail(id) {
 function renderBoardDetail() {
   const board = currentBoard;
   boardNameEl.textContent = board.name;
-  boardMetaEl.textContent = `${board.category} · ${board.characters.length}/${board.targetSize} characters · ${board.status === 'COMPLETE' ? 'Complete' : 'In progress'}`;
+  boardMetaEl.textContent = `${board.characters.length}/${board.targetSize} characters · ${board.status === 'COMPLETE' ? 'Complete' : 'In progress'}`;
 
   const completeBtn = document.getElementById('completeBoardBtn');
   completeBtn.disabled = board.status === 'COMPLETE';
@@ -253,7 +252,7 @@ generateBtn.addEventListener('click', async () => {
       }
       renderCharacterGrid();
       renderTraits();
-      boardMetaEl.textContent = `${currentBoard.category} · ${currentBoard.characters.length}/${currentBoard.targetSize} characters · In progress`;
+      boardMetaEl.textContent = `${currentBoard.characters.length}/${currentBoard.targetSize} characters · In progress`;
     } catch (err) {
       statusEl.textContent = err.message;
       statusEl.className = 'status error';

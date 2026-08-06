@@ -41,7 +41,6 @@ data class BoardState(
     val characters: List<Character> = emptyList(),
     val id: String = "",
     val name: String = "",
-    val category: String = "Custom",
     val status: BoardStatus = BoardStatus.IN_PROGRESS,
     val createdAt: String = "",
     val updatedAt: String = "",
@@ -51,7 +50,6 @@ data class BoardState(
 data class BoardSummary(
     val id: String,
     val name: String,
-    val category: String,
     val targetSize: Int,
     val characterCount: Int,
     val status: BoardStatus,
