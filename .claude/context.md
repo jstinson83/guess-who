@@ -60,21 +60,31 @@ precisely, and what bit us before."
 ## Configuration reference
 
 **Gemini**
-- Current model: `gemini-2.5-flash-image` (`GEMINI_MODEL` in
-  `Application.kt`), called from the single `POST /api/transform` route.
+- Current model: `gemini-2.5-flash-image` (`GEMINI_MODEL` in `Gemini.kt`),
+  called via the shared `generatePortrait()` helper from both
+  `POST /api/transform` and `POST /api/boards/{id}/characters`.
 - `GEMINI_API_KEY` is read from an environment variable at request time
   (`System.getenv("GEMINI_API_KEY")`); on Cloud Run it's sourced from
   Secret Manager (see `cloudbuild.yaml`'s `--set-secrets`), not baked into
   the image.
+
+**Firestore**
+- Named database `guess-who` (`FIRESTORE_DATABASE_ID` in `Application.kt`),
+  *not* `(default)` — `(default)` is already used by the unrelated `foodie`
+  app in the same GCP project. Must exist before the app can use it
+  (`gcloud firestore databases create --database=guess-who`, see
+  `README.md`) — Firestore doesn't auto-create named databases.
+- Location `northamerica-northeast1`, chosen to match the Cloud Run region
+  below; fixed at creation time, can't be changed later.
 
 **Deploy**
 - GCP project `foodie-503510`, Cloud Run service `guess-who`, region
   `northamerica-northeast1`. Same GCP project as the unrelated `foodie`
   repo (shared Artifact Registry repo `cloud-run-source-deploy`, separate
   Cloud Run services) — see `CLAUDE.md` for why that's not a problem.
-  Firestore (Native mode) lives in the same project; the Cloud Run runtime
-  service account needs the `roles/datastore.user` IAM role — see
-  `README.md`'s one-time setup section.
+  The Cloud Run runtime service account needs the `roles/datastore.user`
+  IAM role for Firestore access — see `README.md`'s one-time setup
+  section.
 
 ## Major features (as of last update)
 

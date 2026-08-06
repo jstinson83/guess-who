@@ -71,16 +71,32 @@ One-time setup (not automated — do this once in the GCP project):
      --role="roles/secretmanager.secretAccessor"
    ```
 
-3. **Grant the same service account Firestore access** (boards won't
-   persist without this — the Firestore API itself is assumed already
-   enabled on the project):
+3. **Create the `guess-who` Firestore database.** This project already has a
+   `(default)` Firestore database in use by an unrelated app, so boards use
+   a separate *named* database instead — Firestore doesn't create named
+   databases automatically, this is a one-time step:
+   ```bash
+   gcloud firestore databases create \
+     --project=foodie-503510 \
+     --database=guess-who \
+     --location=northamerica-northeast1 \
+     --type=firestore-native
+   ```
+   (Location can't be changed after creation; `northamerica-northeast1` was
+   picked to match the Cloud Run region above. If you'd rather use a
+   different database name, update `FIRESTORE_DATABASE_ID` in
+   `Application.kt` to match.)
+
+4. **Grant the Cloud Run runtime service account Firestore access** (this
+   role is project-wide, so it covers every database in the project,
+   including the named one above):
    ```bash
    gcloud projects add-iam-policy-binding foodie-503510 \
      --member="serviceAccount:PROJECT_NUMBER-compute@developer.gserviceaccount.com" \
      --role="roles/datastore.user"
    ```
 
-4. **Create the Cloud Build trigger** on push to `main`:
+5. **Create the Cloud Build trigger** on push to `main`:
    ```bash
    gcloud builds triggers create github \
      --project=foodie-503510 \

@@ -26,6 +26,10 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 import kotlinx.serialization.json.Json
 
+// Must already exist (Firestore doesn't auto-create named databases) — see README's one-time
+// GCP setup section for the `gcloud firestore databases create` command.
+private const val FIRESTORE_DATABASE_ID = "guess-who"
+
 fun main() {
     embeddedServer(Netty, port = 8080, host = "0.0.0.0", module = Application::module).start(wait = true)
 }
@@ -42,10 +46,13 @@ fun Application.module() {
         }
     }
 
+    // A named database, not `(default)` — this GCP project already has a `(default)` Firestore
+    // database in use by an unrelated app, and named databases keep the two fully separate.
     // Deferred until a board route is actually hit, so plain `/api/transform` usage (e.g. local
     // dev without GCP application-default credentials configured) still works.
     val boardRepository: Lazy<BoardRepository> = lazy {
-        FirestoreBoardRepository(FirestoreOptions.getDefaultInstance().service)
+        val firestore = FirestoreOptions.newBuilder().setDatabaseId(FIRESTORE_DATABASE_ID).build().service
+        FirestoreBoardRepository(firestore)
     }
 
     routing {
