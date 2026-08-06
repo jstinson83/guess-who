@@ -15,6 +15,8 @@ const personNameInput = document.getElementById('personName');
 const generateBtn = document.getElementById('generateBtn');
 const statusEl = document.getElementById('status');
 const resultImg = document.getElementById('resultImg');
+const addCharacterPanel = document.getElementById('addCharacterPanel');
+const addCharacterOverlay = document.getElementById('addCharacterOverlay');
 
 let cropper = null;
 let currentBoard = null;
@@ -140,7 +142,6 @@ function renderBoardDetail() {
   completeBtn.disabled = board.status === 'COMPLETE';
   completeBtn.textContent = board.status === 'COMPLETE' ? 'Board complete' : 'Mark board complete';
 
-  const addCharacterPanel = document.getElementById('addCharacterPanel');
   addCharacterPanel.classList.toggle('hidden', board.status === 'COMPLETE');
 
   renderCharacterGrid();
@@ -228,6 +229,8 @@ generateBtn.addEventListener('click', async () => {
     form.append('traits', JSON.stringify(traits));
 
     generateBtn.disabled = true;
+    addCharacterPanel.classList.add('busy');
+    addCharacterOverlay.classList.remove('hidden');
     statusEl.textContent = 'Generating…';
     statusEl.className = 'status';
     resultImg.style.display = 'none';
@@ -258,6 +261,8 @@ generateBtn.addEventListener('click', async () => {
       statusEl.className = 'status error';
     } finally {
       generateBtn.disabled = false;
+      addCharacterPanel.classList.remove('busy');
+      addCharacterOverlay.classList.add('hidden');
     }
   }, 'image/png');
 });
