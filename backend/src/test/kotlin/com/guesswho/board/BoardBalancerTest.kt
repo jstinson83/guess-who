@@ -122,6 +122,31 @@ class BoardBalancerTest {
         assertEquals("duplicates an existing character", score.rejectionReason)
     }
 
+    @Test
+    fun `scoreCandidate detects an exclusivity conflict between non-adjacent candidate traits`() {
+        // "hat" sits between the two conflicting hair-color traits here, so neither adjacent
+        // pair (hair_light,hat) or (hat,hair_dark) conflicts — only the non-adjacent
+        // (hair_light,hair_dark) pair does. Guards against a pairing helper that only
+        // checks neighboring elements (e.g. zipWithNext) instead of every pair.
+        val board = BoardState(targetSize = 10, characters = emptyList())
+
+        val score = BoardBalancer.scoreCandidate(board, setOf("hair_light", "hat", "hair_dark"), TestPool)
+
+        assertTrue(score.rejected)
+    }
+
+    @Test
+    fun `scoreCandidate silently ignores a trait id that is not in the pool`() {
+        val board = BoardState(targetSize = 10, characters = listOf(character("a", "glasses", "beard", "marker_a")))
+
+        val withUnknownId = BoardBalancer.scoreCandidate(board, setOf("glasses", "totally_not_a_feature"), TestPool)
+        val withoutUnknownId = BoardBalancer.scoreCandidate(board, setOf("glasses"), TestPool)
+
+        assertFalse(withUnknownId.rejected)
+        assertEquals(withoutUnknownId.balanceScore, withUnknownId.balanceScore)
+        assertEquals(withoutUnknownId.correlationPenalty, withUnknownId.correlationPenalty)
+    }
+
     // --- scoreCandidate: balance component ---
 
     @Test

@@ -58,20 +58,33 @@ object BoardBalancer {
         correlationWeight: Double = 1.0,
     ): CandidateScore {
         val features = pool.allFeatures()
+        val byId = features.associateBy { it.id }
+        val candidateFeatures = candidateTraits.mapNotNull { byId[it] }
+        val n = board.characters.size
 
-        for (feature in features) {
-            if (feature.id !in candidateTraits) continue
-            val conflict = feature.exclusiveWith.firstOrNull { it in candidateTraits }
-            if (conflict != null) {
+        // Exclusivity conflicts and correlation are both properties of a *pair* of
+        // candidate features, so both are checked in one pass over the candidate's pairs
+        // instead of a separate whole-pool scan plus a separate pairwise scan.
+        var correlationPenalty = 0.0
+        for ((f1, f2) in candidateFeatures.allPairs()) {
+            if (f2.id in f1.exclusiveWith) {
                 return CandidateScore(
                     balanceScore = 0.0,
                     correlationPenalty = 0.0,
                     overallScore = Double.NEGATIVE_INFINITY,
                     rejected = true,
-                    rejectionReason = "'${feature.id}' conflicts with '$conflict'",
+                    rejectionReason = "'${f1.id}' conflicts with '${f2.id}'",
                 )
             }
+            if (n > 0) {
+                val actual = board.characters.count { f1.id in it.traits && f2.id in it.traits }
+                val count1 = board.characters.count { f1.id in it.traits }
+                val count2 = board.characters.count { f2.id in it.traits }
+                val expected = count1.toDouble() * count2 / n
+                correlationPenalty += maxOf(0.0, actual - expected)
+            }
         }
+
         if (board.characters.any { it.traits == candidateTraits }) {
             return CandidateScore(
                 balanceScore = 0.0,
@@ -82,30 +95,11 @@ object BoardBalancer {
             )
         }
 
-        val statuses = features.associateWith { statusOf(it, board) }
-        val n = board.characters.size
-
         val balanceScore = features.sumOf { feature ->
-            val status = statuses.getValue(feature)
+            val status = statusOf(feature, board)
             val targetMid = (status.targetYesRange.first + status.targetYesRange.last) / 2.0
             val deficit = targetMid - status.currentYes
             if (feature.id in candidateTraits) deficit else -deficit
-        }
-
-        var correlationPenalty = 0.0
-        if (n > 0) {
-            val trueIds = candidateTraits.toList()
-            for (i in trueIds.indices) {
-                for (j in i + 1 until trueIds.size) {
-                    val f1 = trueIds[i]
-                    val f2 = trueIds[j]
-                    val actual = board.characters.count { f1 in it.traits && f2 in it.traits }
-                    val rate1 = board.characters.count { f1 in it.traits }.toDouble() / n
-                    val rate2 = board.characters.count { f2 in it.traits }.toDouble() / n
-                    val expected = n * rate1 * rate2
-                    correlationPenalty += maxOf(0.0, actual - expected)
-                }
-            }
         }
 
         return CandidateScore(
@@ -144,4 +138,8 @@ object BoardBalancer {
         }
         return FeatureStatus(feature, yes, no, range, state)
     }
+
+    /** Every unordered pair of distinct elements, e.g. [a, b, c] -> (a,b), (a,c), (b,c). */
+    private fun <T> List<T>.allPairs(): List<Pair<T, T>> =
+        flatMapIndexed { i, first -> drop(i + 1).map { second -> first to second } }
 }
