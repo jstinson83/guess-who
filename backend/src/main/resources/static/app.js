@@ -20,6 +20,7 @@ const addCharacterOverlay = document.getElementById('addCharacterOverlay');
 
 let cropper = null;
 let currentBoard = null;
+let detectedTraitIds = [];
 
 // --- Routing: '#/board/<id>' shows the detail view, anything else shows the list. ---
 
@@ -197,6 +198,31 @@ document.getElementById('completeBoardBtn').addEventListener('click', async () =
 
 // --- Add a character (crop + traits + generate) ---
 
+async function autoDetectTraits(blob) {
+  if (!currentBoard) return;
+
+  const form = new FormData();
+  form.append('image', blob, 'photo.png');
+  statusEl.textContent = 'Detecting features…';
+  statusEl.className = 'status';
+
+  try {
+    const res = await fetch(`/api/boards/${currentBoard.id}/characters/detect-traits`, { method: 'POST', body: form });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Feature detection failed');
+
+    detectedTraitIds = data.traitIds || [];
+    for (const id of detectedTraitIds) {
+      const checkbox = traitsEl.querySelector(`input[value="${id}"]`);
+      if (checkbox && !checkbox.disabled) checkbox.checked = true;
+    }
+    statusEl.textContent = '';
+  } catch (err) {
+    // Best-effort suggestion only — leave traits for manual selection if detection fails.
+    statusEl.textContent = '';
+  }
+}
+
 fileInput.addEventListener('change', () => {
   const file = fileInput.files[0];
   if (!file) return;
@@ -207,11 +233,20 @@ fileInput.addEventListener('change', () => {
   resultImg.style.display = 'none';
   statusEl.textContent = '';
   statusEl.className = 'status';
+  detectedTraitIds = [];
 
   if (cropper) cropper.destroy();
   cropImage.onload = () => {
-    cropper = new Cropper(cropImage, { aspectRatio: 1, viewMode: 1 });
-    generateBtn.disabled = false;
+    cropper = new Cropper(cropImage, {
+      aspectRatio: 1,
+      viewMode: 1,
+      ready() {
+        generateBtn.disabled = false;
+        cropper.getCroppedCanvas({ width: 512, height: 512 })?.toBlob((blob) => {
+          if (blob) autoDetectTraits(blob);
+        }, 'image/png');
+      },
+    });
   };
 });
 
@@ -219,6 +254,7 @@ generateBtn.addEventListener('click', async () => {
   if (!cropper || !currentBoard) return;
 
   const traits = Array.from(document.querySelectorAll('#traits input:checked:not(:disabled)')).map((el) => el.value);
+  const removeTraits = detectedTraitIds.filter((id) => !traits.includes(id));
   const name = personNameInput.value.trim();
 
   const canvas = cropper.getCroppedCanvas({ width: 768, height: 768 });
@@ -227,6 +263,7 @@ generateBtn.addEventListener('click', async () => {
     form.append('image', blob, 'photo.png');
     form.append('name', name);
     form.append('traits', JSON.stringify(traits));
+    form.append('removeTraits', JSON.stringify(removeTraits));
 
     generateBtn.disabled = true;
     addCharacterPanel.classList.add('busy');
@@ -249,6 +286,7 @@ generateBtn.addEventListener('click', async () => {
       personNameInput.value = '';
       fileInput.value = '';
       cropContainer.style.display = 'none';
+      detectedTraitIds = [];
       if (cropper) {
         cropper.destroy();
         cropper = null;
