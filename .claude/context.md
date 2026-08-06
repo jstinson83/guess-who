@@ -88,9 +88,9 @@ precisely, and what bit us before."
 
 ## Major features (as of last update)
 
-- **Board persistence** (Firestore): create a board (name, category,
-  target size), add characters to it one photo at a time, and reload it
-  later by URL (`#/board/<id>`) — in-progress or complete. `BoardRepository`
+- **Board persistence** (Firestore): create a board (name, target size),
+  add characters to it one photo at a time, and reload it later by URL
+  (`#/board/<id>`) — in-progress or complete. `BoardRepository`
   (`board/BoardRepository.kt`) is the storage interface;
   `FirestoreBoardRepository` is the only implementation so far. Route
   handlers in `board/BoardRoutes.kt`:
@@ -140,6 +140,15 @@ precisely, and what bit us before."
   the add-character flow now uses the real feature pool. `/api/transform`
   itself is untouched and still accepts freeform trait strings, since
   nothing about that endpoint's contract needed to change.
+- **Board category was dropped, deliberately** — the maintainer decided we
+  don't need it. `docs/PRODUCT_SPEC.md`'s "Create Board" step lists a
+  category picker (Family/Friends/Office/Classroom/Sports team/Custom),
+  and boards briefly had a `category` field, but it was purely cosmetic —
+  nothing in the feature pool, balancing math, or board analysis ever
+  keyed off it, so it was removed rather than kept as dead decoration.
+  Don't reintroduce a bare category field expecting it to matter; if
+  category-driven behavior is wanted later (e.g. a different feature pool
+  per category), that's new design work, not a restoration.
 
 ## Maintenance
 

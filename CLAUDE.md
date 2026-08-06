@@ -69,8 +69,8 @@ fix the checklist, don't quietly reinterpret the spec.
 ## Current architecture (see `.claude/context.md` for details)
 
 One Ktor service, Firestore for persistence, no auth, no frontend build
-step. Boards (name, category, target size, characters with traits/portrait)
-persist to Firestore and are driven by `BoardBalancer`/`DefaultFeaturePool`
+step. Boards (name, target size, characters with traits/portrait) persist
+to Firestore and are driven by `BoardBalancer`/`DefaultFeaturePool`
 for feature availability, via `/api/boards/...` routes and the board
 list/detail UI. The original standalone `POST /api/transform` endpoint
 (freeform trait strings, no board, no persistence) still exists unchanged

@@ -89,7 +89,6 @@ section.hidden {
 }
 
 .new-board-form input[type='text'],
-.new-board-form select,
 .new-board-form input[type='number'] {
   font: inherit;
   padding: 0.6rem 0.8rem;

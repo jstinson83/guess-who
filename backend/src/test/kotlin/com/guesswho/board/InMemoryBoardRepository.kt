@@ -8,13 +8,12 @@ class InMemoryBoardRepository : BoardRepository {
     private val nextId = AtomicInteger(1)
     private val boards = linkedMapOf<String, BoardState>()
 
-    override suspend fun createBoard(name: String, category: String, targetSize: Int): BoardState {
+    override suspend fun createBoard(name: String, targetSize: Int): BoardState {
         val now = Instant.now().toString()
         val board = BoardState(
             targetSize = targetSize,
             id = "board-${nextId.getAndIncrement()}",
             name = name,
-            category = category,
             status = BoardStatus.IN_PROGRESS,
             createdAt = now,
             updatedAt = now,
@@ -25,7 +24,7 @@ class InMemoryBoardRepository : BoardRepository {
 
     override suspend fun listBoards(): List<BoardSummary> =
         boards.values.sortedByDescending { it.updatedAt }.map {
-            BoardSummary(it.id, it.name, it.category, it.targetSize, it.characters.size, it.status, it.updatedAt)
+            BoardSummary(it.id, it.name, it.targetSize, it.characters.size, it.status, it.updatedAt)
         }
 
     override suspend fun getBoard(id: String): BoardState? = boards[id]

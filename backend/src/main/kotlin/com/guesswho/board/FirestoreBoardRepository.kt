@@ -19,13 +19,12 @@ class FirestoreBoardRepository(private val db: Firestore) : BoardRepository {
 
     private val boards = db.collection("boards")
 
-    override suspend fun createBoard(name: String, category: String, targetSize: Int): BoardState {
+    override suspend fun createBoard(name: String, targetSize: Int): BoardState {
         val ref = boards.document()
         val now = Instant.now().toString()
         ref.set(
             mapOf(
                 "name" to name,
-                "category" to category,
                 "targetSize" to targetSize.toLong(),
                 "characterCount" to 0L,
                 "status" to BoardStatus.IN_PROGRESS.name,
@@ -38,7 +37,6 @@ class FirestoreBoardRepository(private val db: Firestore) : BoardRepository {
             targetSize = targetSize,
             id = ref.id,
             name = name,
-            category = category,
             status = BoardStatus.IN_PROGRESS,
             createdAt = now,
             updatedAt = now,
@@ -113,7 +111,6 @@ class FirestoreBoardRepository(private val db: Firestore) : BoardRepository {
         characters = characters,
         id = id,
         name = getString("name") ?: "",
-        category = getString("category") ?: "Custom",
         status = parseStatus(getString("status")),
         createdAt = getString("createdAt") ?: "",
         updatedAt = getString("updatedAt") ?: "",
@@ -122,7 +119,6 @@ class FirestoreBoardRepository(private val db: Firestore) : BoardRepository {
     private fun DocumentSnapshot.toBoardSummary() = BoardSummary(
         id = id,
         name = getString("name") ?: "",
-        category = getString("category") ?: "Custom",
         targetSize = (getLong("targetSize") ?: 0L).toInt(),
         characterCount = (getLong("characterCount") ?: 0L).toInt(),
         status = parseStatus(getString("status")),

@@ -23,10 +23,11 @@ spec, not a maintainer commitment.
 
 ### Boards (replace the current stateless single-photo flow)
 
-- [x] Persist boards: name + category (Family/Friends/Office/Classroom/
-      Sports team/Custom) + the list of people/portraits on it
-      (Firestore; `board/BoardRepository.kt` + `FirestoreBoardRepository.kt`)
-- [x] "Create Board" flow (choose category, name it)
+- [x] Persist boards: name + the list of people/portraits on it (Firestore;
+      `board/BoardRepository.kt` + `FirestoreBoardRepository.kt`) — the
+      spec's category field (Family/Friends/Office/...) was deliberately
+      dropped, not forgotten; see `context.md`'s Decisions
+- [x] "Create Board" flow (name it, pick a target size)
 - [x] Persist each generated portrait against a board instead of
       returning it directly to the client and forgetting it
 
