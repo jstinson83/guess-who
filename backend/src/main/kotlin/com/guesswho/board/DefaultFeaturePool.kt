@@ -19,6 +19,10 @@ object DefaultFeaturePool : FeaturePool {
         FeatureDef("hair_dark", "Dark hair", Tier.CORE, range(10.0, 14.0), exclusiveWith = setOf("hair_light")),
         FeatureDef("eyes_big", "Big eyes", Tier.CORE, range(10.0, 14.0), exclusiveWith = setOf("eyes_small")),
         FeatureDef("eyes_small", "Small eyes", Tier.CORE, range(10.0, 14.0), exclusiveWith = setOf("eyes_big")),
+        FeatureDef("skin_light", "Light skin", Tier.CORE, range(10.0, 14.0), exclusiveWith = setOf("skin_dark")),
+        FeatureDef("skin_dark", "Dark skin", Tier.CORE, range(10.0, 14.0), exclusiveWith = setOf("skin_light")),
+        FeatureDef("young", "Young", Tier.CORE, range(10.0, 14.0), exclusiveWith = setOf("old")),
+        FeatureDef("old", "Old", Tier.CORE, range(10.0, 14.0), exclusiveWith = setOf("young")),
 
         // Tier 2: secondary
         FeatureDef("big_nose", "Big nose", Tier.SECONDARY, range(5.0, 8.0)),
@@ -33,9 +37,6 @@ object DefaultFeaturePool : FeaturePool {
         // Tier 3: spice
         FeatureDef("bow_tie", "Bow tie", Tier.SPICE, range(1.0, 3.0)),
         FeatureDef("cowboy_hat", "Cowboy hat", Tier.SPICE, range(1.0, 3.0)),
-        FeatureDef("scar", "Scar", Tier.SPICE, range(1.0, 2.0)),
-        FeatureDef("giant_eyebrows", "Giant eyebrows", Tier.SPICE, range(2.0, 4.0)),
-        FeatureDef("weird_hairstyle", "Weird hairstyle", Tier.SPICE, range(1.0, 3.0)),
     )
 
     override fun allFeatures(): List<FeatureDef> = features
