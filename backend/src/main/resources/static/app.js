@@ -28,6 +28,9 @@ const statusEl = document.getElementById('status');
 const addCharacterPanel = document.getElementById('addCharacterPanel');
 const addCharacterOverlay = document.getElementById('addCharacterOverlay');
 const featuresBackBtn = document.getElementById('featuresBackBtn');
+const traitsCountEl = document.getElementById('traitsCount');
+const duplicateWarningEl = document.getElementById('duplicateWarning');
+const featureBalanceGrid = document.getElementById('featureBalanceGrid');
 
 let cropper = null;
 let currentBoard = null;
@@ -180,6 +183,23 @@ function renderBoardDetail() {
   fabContainer.classList.toggle('hidden', board.status === 'COMPLETE');
 
   renderCharacterGrid();
+  renderFeatureBalance();
+}
+
+// Read-only per-feature counts/targets for the whole board — the same [FeatureStatusDto]
+// data the features step uses per-character, just without the availability/selection layer.
+function renderFeatureBalance() {
+  featureBalanceGrid.innerHTML = '';
+  for (const status of currentBoard.featureStatuses) {
+    const stateClass = status.state.toLowerCase();
+    const pill = document.createElement('div');
+    pill.className = `feature-balance-pill feature-balance-${stateClass}`;
+    pill.innerHTML = `
+      <span>${escapeHtml(status.label)}</span>
+      <span class="feature-balance-count">${status.currentYes}/${status.targetYesMin}–${status.targetYesMax}</span>
+    `;
+    featureBalanceGrid.appendChild(pill);
+  }
 }
 
 function renderCharacterGrid() {
@@ -313,7 +333,9 @@ async function showFeaturesView(id) {
   statusEl.className = 'status';
   detectedTraitIds = [];
   traitsEl.innerHTML = '';
-  generateBtn.disabled = false;
+  traitsCountEl.textContent = '';
+  duplicateWarningEl.classList.add('hidden');
+  generateBtn.disabled = true;
 
   await autoDetectTraits(pendingDetectBlob);
 }
@@ -364,22 +386,62 @@ function renderTraits() {
     if (!feature.available && detected) {
       reason = reason ? `${reason} — detected in photo, will be left out` : 'Detected in photo, will be left out';
     }
+    const status = currentBoard.featureStatuses.find((f) => f.id === feature.id);
+    const stateClass = status ? status.state.toLowerCase() : '';
     const label = document.createElement('label');
     label.className = 'switch' + (feature.available ? '' : ' switch-disabled');
     label.title = reason;
     label.innerHTML = `
       <input type="checkbox" value="${feature.id}" ${feature.available ? '' : 'disabled'} ${feature.available && detected ? 'checked' : ''} />
       <span class="switch-track"></span>${escapeHtml(feature.label)}
+      ${status ? `<span class="switch-count switch-count-${stateClass}">${status.currentYes}/${status.targetYesMin}–${status.targetYesMax}</span>` : ''}
       ${reason ? `<span class="switch-reason">${escapeHtml(reason)}</span>` : ''}
     `;
     traitsEl.appendChild(label);
   }
+  updateTraitsSummary();
+}
+
+traitsEl.addEventListener('change', updateTraitsSummary);
+
+function selectedTraitIds() {
+  return Array.from(document.querySelectorAll('#traits input:checked:not(:disabled)')).map((el) => el.value);
+}
+
+function sameTraitSet(traitsA, traitsB) {
+  if (traitsA.length !== traitsB.length) return false;
+  const setA = new Set(traitsA);
+  return traitsB.every((id) => setA.has(id));
+}
+
+// Keeps the create button gated on the min/max trait count and warns (without blocking) if
+// the current selection exactly matches an existing character — two characters with identical
+// traits can't be told apart in-game, but other untracked features may still make them look
+// different, so this is informational only.
+function updateTraitsSummary() {
+  const selected = selectedTraitIds();
+  const { minTraitsPerCharacter: min, maxTraitsPerCharacter: max } = currentBoard;
+  const inRange = selected.length >= min && selected.length <= max;
+
+  traitsCountEl.textContent = `${selected.length} feature${selected.length === 1 ? '' : 's'} selected (need ${min}–${max})`;
+  traitsCountEl.className = 'status' + (inRange ? '' : ' error');
+
+  const duplicateCount = currentBoard.characters.filter((c) => sameTraitSet(c.traits, selected)).length;
+  if (duplicateCount > 0) {
+    duplicateWarningEl.textContent =
+      `${duplicateCount} existing character${duplicateCount === 1 ? '' : 's'} already ${duplicateCount === 1 ? 'has' : 'have'} this exact combination of features.`;
+    duplicateWarningEl.classList.remove('hidden');
+  } else {
+    duplicateWarningEl.classList.add('hidden');
+  }
+
+  generateBtn.disabled = !inRange;
 }
 
 generateBtn.addEventListener('click', async () => {
   if (!pendingFullBlob || !currentBoard) return;
 
-  const traits = Array.from(document.querySelectorAll('#traits input:checked:not(:disabled)')).map((el) => el.value);
+  const traits = selectedTraitIds();
   const removeTraits = detectedTraitIds.filter((id) => !traits.includes(id));
   const name = personNameInput.value.trim();
 
@@ -409,7 +471,7 @@ generateBtn.addEventListener('click', async () => {
     statusEl.textContent = err.message;
     statusEl.className = 'status error';
   } finally {
-    generateBtn.disabled = false;
+    updateTraitsSummary();
     addCharacterPanel.classList.remove('busy');
     addCharacterOverlay.classList.add('hidden');
   }
