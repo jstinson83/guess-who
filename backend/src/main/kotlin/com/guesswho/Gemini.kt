@@ -76,17 +76,24 @@ suspend fun generatePortrait(
         " The photo shows ${removeTraitPhrases.joinToString(", ")} — leave that out of the cartoon."
     } else ""
     val styleClause = if (styleReferenceBytes != null) {
-        " The second image is a style reference only — copy its rendering technique (line weight, " +
-            "shading style, color palette, background treatment) and nothing else. Do not copy any " +
-            "facial features, face shape, proportions, skin tone, or identity from the second image " +
-            "— those must come only from the first photo."
+        " A second reference image is attached for rendering technique ONLY — its line weight, shading " +
+            "style, color palette, and background treatment. It shows a completely different person: " +
+            "none of their facial features, face shape, proportions, skin tone, or identity may be used. " +
+            "Every identity detail must come exclusively from the first photo."
     } else ""
-    val prompt = "Redraw this photo of a person as a bold, flat-color cartoon illustration — a stylized " +
-        "cartoon portrait, not a photorealistic edit. Crop and reframe to a head-and-shoulders portrait " +
-        "centered on the face, and replace the background with a plain solid color so the person is the " +
-        "only subject in frame.$traitsClause$removeClause$styleClause Preserve the exact face shape, eye " +
-        "shape and spacing, nose, mouth, and skin tone from the first photo — only the rendering " +
-        "technique should change, the person's actual likeness must stay intact and clearly recognizable."
+    val prompt = "TOP PRIORITY, more important than the art style: the output must be immediately " +
+        "recognizable as the exact same individual in the first photo — someone who knows them in real " +
+        "life should identify them at a glance. Preserve their precise face shape, jawline, eye shape, " +
+        "eye spacing and color, eyebrow shape, nose shape, mouth and lip shape, ears, skin tone, and hair " +
+        "color and texture exactly as shown in the first photo. Do not average, idealize, beautify, " +
+        "slim, or generify their features — small asymmetries and distinguishing traits are what make " +
+        "the likeness work and must be kept.\n\n" +
+        "With that constraint, redraw this photo of a person as a bold, flat-color cartoon illustration " +
+        "— a stylized cartoon portrait, not a photorealistic edit. Crop and reframe to a head-and-shoulders " +
+        "portrait centered on the face, and replace the background with a plain solid color so the person " +
+        "is the only subject in frame.$traitsClause$removeClause$styleClause\n\n" +
+        "Reminder: likeness to the first photo takes priority over stylization — if in doubt, keep the " +
+        "person's real features rather than smoothing them toward a generic cartoon face."
 
     val parts = buildList {
         add(GeminiPart(text = prompt))
