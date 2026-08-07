@@ -36,9 +36,13 @@ class BoardRoutesTest {
 
     private fun repository() = lazy { InMemoryBoardRepository() as BoardRepository }
 
+    private fun portraitStore() = lazy { InMemoryPortraitStore() as com.guesswho.storage.PortraitStore }
+
     private fun io.ktor.server.application.Application.installBoardRoutes() {
         install(ContentNegotiation) { json() }
-        routing { boardRoutes(repository(), HttpClient(CIO) { install(ClientContentNegotiation) { json() } }) }
+        routing {
+            boardRoutes(repository(), HttpClient(CIO) { install(ClientContentNegotiation) { json() } }, portraitStore())
+        }
     }
 
     @Test
