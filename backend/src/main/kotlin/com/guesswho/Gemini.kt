@@ -76,14 +76,17 @@ suspend fun generatePortrait(
         " The photo shows ${removeTraitPhrases.joinToString(", ")} — leave that out of the cartoon."
     } else ""
     val styleClause = if (styleReferenceBytes != null) {
-        " The second image is a style reference only — match its exact illustration style (line " +
-            "weight, shading, color treatment, background color) but depict the person from the " +
-            "first photo, not the person shown in the reference."
+        " The second image is a style reference only — copy its rendering technique (line weight, " +
+            "shading style, color palette, background treatment) and nothing else. Do not copy any " +
+            "facial features, face shape, proportions, skin tone, or identity from the second image " +
+            "— those must come only from the first photo."
     } else ""
     val prompt = "Redraw this photo of a person as a bold, flat-color cartoon illustration — a stylized " +
         "cartoon portrait, not a photorealistic edit. Crop and reframe to a head-and-shoulders portrait " +
         "centered on the face, and replace the background with a plain solid color so the person is the " +
-        "only subject in frame.$traitsClause$removeClause$styleClause Keep the person clearly recognizable."
+        "only subject in frame.$traitsClause$removeClause$styleClause Preserve the exact face shape, eye " +
+        "shape and spacing, nose, mouth, and skin tone from the first photo — only the rendering " +
+        "technique should change, the person's actual likeness must stay intact and clearly recognizable."
 
     val parts = buildList {
         add(GeminiPart(text = prompt))
