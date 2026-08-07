@@ -75,8 +75,9 @@ modifications are all unlocked. Example checklist:
 - [ ] Bow tie
 - [ ] Curly hair
 - [ ] Long hair
-- [ ] Scar
 - [ ] Freckles
+- [ ] Age (young/old)
+- [ ] Skin tone (light/dark)
 - etc.
 
 The user selects the desired modifications. AI regenerates the portrait.
@@ -147,7 +148,7 @@ Features should all correspond to natural Guess Who questions.
 Glasses, Sunglasses, Hat, Bow, Earrings, Necklace, Tie, Bow tie
 
 **Hair**
-Long hair, Curly hair, Bald, Ponytail, Afro, Mohawk
+Long hair, Curly hair, Bald, Ponytail, Afro, Mohawk, Light hair, Dark hair
 
 **Face**
 Big nose, Big ears, Thick eyebrows, Freckles, Dimples, Rosy cheeks, Chin
@@ -155,6 +156,12 @@ cleft
 
 **Facial Hair**
 Mustache, Beard, Goatee, Sideburns
+
+**Skin tone**
+Light skin, Dark skin
+
+**Age**
+Young, Old
 
 **Clothing**
 Hoodie, Suit, Scarf, Vest, Bright sweater
