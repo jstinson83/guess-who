@@ -40,6 +40,14 @@ private const val FIRESTORE_DATABASE_ID = "guess-who"
 // project.
 private const val PORTRAIT_BUCKET = "foodie-503510-guess-who-portraits"
 
+// A hand-picked portrait, uploaded once to the same bucket, sent to Gemini alongside every new
+// subject photo as a style anchor so portraits across a board share one consistent art style
+// instead of each generation reinterpreting "cartoon style" independently — see the
+// styleReferenceBytes doc on generatePortrait() in Gemini.kt. Missing is not an error: portrait
+// generation just falls back to style-by-prompt-wording alone. Not private: also used by
+// `board/BoardRoutes.kt`'s add-character flow.
+const val STYLE_TEMPLATE_OBJECT_NAME = "template/portrait.jpeg"
+
 fun main() {
     embeddedServer(Netty, port = 8080, host = "0.0.0.0", module = Application::module).start(wait = true)
 }
@@ -105,7 +113,15 @@ fun Application.module() {
                 return@post
             }
 
-            when (val result = generatePortrait(httpClient, apiKey, bytes, imageMime, traits)) {
+            val styleReference = runCatching { portraitStore.value.fetch(STYLE_TEMPLATE_OBJECT_NAME) }.getOrNull()
+
+            when (
+                val result = generatePortrait(
+                    httpClient, apiKey, bytes, imageMime, traits,
+                    styleReferenceBytes = styleReference?.bytes,
+                    styleReferenceMime = styleReference?.contentType,
+                )
+            ) {
                 is PortraitResult.Success -> {
                     val dataUrl = "data:${result.mimeType};base64,${Base64.getEncoder().encodeToString(result.imageBytes)}"
                     call.respond(mapOf("image" to dataUrl))
@@ -114,6 +130,6 @@ fun Application.module() {
             }
         }
 
-        boardRoutes(boardRepository, httpClient)
+        boardRoutes(boardRepository, httpClient, portraitStore)
     }
 }

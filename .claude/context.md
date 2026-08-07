@@ -37,7 +37,16 @@ precisely, and what bit us before."
   goes in, one stylized cartoon image comes back (framed head-and-shoulders,
   background replaced with a plain color). Used by both the standalone
   `/api/transform` endpoint and the board add-character flow, so the prompt
-  lives in exactly one place. `detectTraits()` (`board/TraitDetection.kt`,
+  lives in exactly one place. Every call also sends a fixed style-reference
+  image as a second `inlineData` part (a hand-picked portrait at
+  `STYLE_TEMPLATE_OBJECT_NAME` = `template/portrait.jpeg` in the portraits
+  bucket, fetched via the same `PortraitStore` used for character
+  portraits) so Gemini matches its exact line weight/shading/color instead
+  of reinterpreting "cartoon style" fresh each generation — this is what
+  keeps portraits across a board looking like one consistent art style.
+  Fetch failures (template missing, no GCS access) are swallowed and
+  generation proceeds without a reference rather than failing the request.
+  `detectTraits()` (`board/TraitDetection.kt`,
   board-only, takes a candidate `List<FeatureDef>` so it isn't itself
   board-aware) — a photo plus a feature list goes in, a JSON list of which
   of those features are visually present comes back. The add-character

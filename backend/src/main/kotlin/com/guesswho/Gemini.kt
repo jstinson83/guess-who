@@ -52,6 +52,14 @@ sealed interface PortraitResult {
  * photo happens to show but that weren't selected, e.g. a detected hat the user unchecked).
  * Shared by the standalone `/api/transform` endpoint and the board add-character flow so the
  * Gemini call and prompt live in exactly one place.
+ *
+ * [styleReferenceBytes]/[styleReferenceMime], when supplied, are a second image sent alongside
+ * the subject's photo purely as a style anchor — a previously-generated portrait whose exact
+ * line weight, shading, and color treatment new portraits should match, so a whole board's
+ * portraits look like they came from one illustrator instead of each generation reinterpreting
+ * "cartoon style" independently. Optional because it's fetched from GCS by the caller (see
+ * `STYLE_TEMPLATE_OBJECT_NAME` in `Application.kt`) and a missing template shouldn't block
+ * portrait generation.
  */
 suspend fun generatePortrait(
     httpClient: HttpClient,
@@ -60,26 +68,32 @@ suspend fun generatePortrait(
     imageMime: String,
     traitPhrases: List<String>,
     removeTraitPhrases: List<String> = emptyList(),
+    styleReferenceBytes: ByteArray? = null,
+    styleReferenceMime: String? = null,
 ): PortraitResult {
     val traitsClause = if (traitPhrases.isNotEmpty()) " Give the person these features: ${traitPhrases.joinToString(", ")}." else ""
     val removeClause = if (removeTraitPhrases.isNotEmpty()) {
         " The photo shows ${removeTraitPhrases.joinToString(", ")} — leave that out of the cartoon."
     } else ""
+    val styleClause = if (styleReferenceBytes != null) {
+        " The second image is a style reference only — match its exact illustration style (line " +
+            "weight, shading, color treatment, background color) but depict the person from the " +
+            "first photo, not the person shown in the reference."
+    } else ""
     val prompt = "Redraw this photo of a person as a bold, flat-color cartoon illustration — a stylized " +
         "cartoon portrait, not a photorealistic edit. Crop and reframe to a head-and-shoulders portrait " +
         "centered on the face, and replace the background with a plain solid color so the person is the " +
-        "only subject in frame.$traitsClause$removeClause Keep the person clearly recognizable."
+        "only subject in frame.$traitsClause$removeClause$styleClause Keep the person clearly recognizable."
 
-    val geminiRequest = GeminiRequest(
-        contents = listOf(
-            GeminiContent(
-                parts = listOf(
-                    GeminiPart(text = prompt),
-                    GeminiPart(inlineData = GeminiInlineData(imageMime, Base64.getEncoder().encodeToString(imageBytes))),
-                ),
-            ),
-        ),
-    )
+    val parts = buildList {
+        add(GeminiPart(text = prompt))
+        add(GeminiPart(inlineData = GeminiInlineData(imageMime, Base64.getEncoder().encodeToString(imageBytes))))
+        if (styleReferenceBytes != null && styleReferenceMime != null) {
+            add(GeminiPart(inlineData = GeminiInlineData(styleReferenceMime, Base64.getEncoder().encodeToString(styleReferenceBytes))))
+        }
+    }
+
+    val geminiRequest = GeminiRequest(contents = listOf(GeminiContent(parts = parts)))
 
     val response = httpClient.post(GEMINI_URL) {
         header("x-goog-api-key", apiKey)

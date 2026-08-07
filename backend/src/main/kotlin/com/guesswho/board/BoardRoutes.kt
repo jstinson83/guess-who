@@ -1,7 +1,9 @@
 package com.guesswho.board
 
 import com.guesswho.PortraitResult
+import com.guesswho.STYLE_TEMPLATE_OBJECT_NAME
 import com.guesswho.generatePortrait
+import com.guesswho.storage.PortraitStore
 import com.guesswho.storage.StoredPortrait
 import io.ktor.client.HttpClient
 import io.ktor.http.ContentType
@@ -65,10 +67,13 @@ data class BoardSummaryDto(
 )
 
 /**
- * [repository] is a [Lazy] so building the Firestore client (which needs GCP application-default
- * credentials) is deferred until a board route is actually hit, rather than at server startup.
+ * [repository] and [portraitStore] are [Lazy] so building their GCP clients (which need
+ * application-default credentials) is deferred until a board route is actually hit, rather than
+ * at server startup. [portraitStore] is used directly here (not through [repository]) purely to
+ * fetch the style-reference template image for [generatePortrait] — character portraits
+ * themselves still go through [repository].
  */
-fun Route.boardRoutes(repository: Lazy<BoardRepository>, httpClient: HttpClient) {
+fun Route.boardRoutes(repository: Lazy<BoardRepository>, httpClient: HttpClient, portraitStore: Lazy<PortraitStore>) {
     route("/api/boards") {
         post {
             val request = call.receive<CreateBoardRequest>()
@@ -216,7 +221,15 @@ fun Route.boardRoutes(repository: Lazy<BoardRepository>, httpClient: HttpClient)
                 val featureLabels = traitIds.mapNotNull { id -> DefaultFeaturePool.allFeatures().find { it.id == id }?.label }
                 val removeFeatureLabels = removeTraitIds.mapNotNull { id -> DefaultFeaturePool.allFeatures().find { it.id == id }?.label }
 
-                when (val result = generatePortrait(httpClient, apiKey, bytes, imageMime, featureLabels, removeFeatureLabels)) {
+                val styleReference = runCatching { portraitStore.value.fetch(STYLE_TEMPLATE_OBJECT_NAME) }.getOrNull()
+
+                when (
+                    val result = generatePortrait(
+                        httpClient, apiKey, bytes, imageMime, featureLabels, removeFeatureLabels,
+                        styleReferenceBytes = styleReference?.bytes,
+                        styleReferenceMime = styleReference?.contentType,
+                    )
+                ) {
                     is PortraitResult.Failure -> {
                         call.respond(result.status, mapOf("error" to result.error))
                         return@post
