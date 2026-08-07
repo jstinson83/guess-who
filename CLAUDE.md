@@ -88,7 +88,7 @@ version and then rebuilt with boards + Firestore in a later session — see
   `GEMINI_MODEL` = `gemini-2.5-flash-image`. Trait detection (`detectTraits`
   in `board/TraitDetection.kt`, image-in/JSON-out, used to pre-check
   add-character feature boxes from the photo) uses the private
-  `GEMINI_TRAIT_MODEL` = `gemini-2.5-flash` in that same file — a
+  `GEMINI_TRAIT_MODEL` = `gemini-3.5-flash` in that same file — a
   text-out-capable model, since the image-gen model can't also return
   structured data about what it saw. Gemini model names churn on Google's
   release schedule outside our control; if either endpoint starts
