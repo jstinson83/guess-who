@@ -20,7 +20,7 @@ import java.util.Base64
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
-private const val GEMINI_TRAIT_MODEL = "gemini-2.5-flash"
+private const val GEMINI_TRAIT_MODEL = "gemini-3.5-flash"
 private const val GEMINI_TRAIT_URL = "https://generativelanguage.googleapis.com/v1beta/models/$GEMINI_TRAIT_MODEL:generateContent"
 
 sealed interface TraitDetectionResult {
