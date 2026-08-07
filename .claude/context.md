@@ -116,6 +116,20 @@ precisely, and what bit us before."
   "Available / Unavailable" example, now live. `BoardBalancer`/
   `DefaultFeaturePool` themselves predate this change (were already built
   and tested) but had no caller until this session.
+- **Trait-count balance surfaced + enforced**: `BoardBalancer.featureCounts`'s
+  per-feature current/target data (already computed, previously unused in the
+  UI) is now rendered as a count badge next to each feature switch in the
+  add-character checklist, and as a collapsible "Feature balance" panel on
+  the board detail screen. Each character is also constrained to
+  `BoardBalancer.MIN_TRAITS_PER_CHARACTER`..`MAX_TRAITS_PER_CHARACTER` (5–8,
+  flat constants, not derived from board/pool size — too few traits makes a
+  character hard to distinguish, too many makes every guess trivial),
+  enforced both in the add-character UI (gates the create button) and
+  server-side in `POST /api/boards/{id}/characters` (rejected before the
+  Gemini call). Selecting a trait set that exactly matches an existing
+  character shows a non-blocking warning with a count — untracked features
+  can still make two characters look different in practice, so this isn't a
+  hard block, unlike the min/max.
 - Board list + create-board UI, board detail UI (character grid,
   add-a-character flow reusing the Cropper.js crop step) —
   `static/index.html` + `static/app.js`. This replaced the old single-page

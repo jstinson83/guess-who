@@ -50,6 +50,8 @@ data class BoardDetailDto(
     val characters: List<CharacterDto>,
     val featureStatuses: List<FeatureStatusDto>,
     val availableFeatures: List<FeatureAvailabilityDto>,
+    val minTraitsPerCharacter: Int,
+    val maxTraitsPerCharacter: Int,
 )
 
 @Serializable
@@ -191,14 +193,26 @@ fun Route.boardRoutes(repository: Lazy<BoardRepository>, httpClient: HttpClient)
                     return@post
                 }
 
+                val traitIds = runCatching { Json.decodeFromString<List<String>>(traitsRaw) }.getOrDefault(emptyList()).toSet()
+                val removeTraitIds = runCatching { Json.decodeFromString<List<String>>(removeTraitsRaw) }.getOrDefault(emptyList()).toSet()
+
+                if (traitIds.size !in BoardBalancer.MIN_TRAITS_PER_CHARACTER..BoardBalancer.MAX_TRAITS_PER_CHARACTER) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf(
+                            "error" to "Characters need between ${BoardBalancer.MIN_TRAITS_PER_CHARACTER} and " +
+                                "${BoardBalancer.MAX_TRAITS_PER_CHARACTER} features (got ${traitIds.size})",
+                        ),
+                    )
+                    return@post
+                }
+
                 val apiKey = System.getenv("GEMINI_API_KEY")
                 if (apiKey.isNullOrBlank()) {
                     call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "GEMINI_API_KEY is not set on the server"))
                     return@post
                 }
 
-                val traitIds = runCatching { Json.decodeFromString<List<String>>(traitsRaw) }.getOrDefault(emptyList()).toSet()
-                val removeTraitIds = runCatching { Json.decodeFromString<List<String>>(removeTraitsRaw) }.getOrDefault(emptyList()).toSet()
                 val featureLabels = traitIds.mapNotNull { id -> DefaultFeaturePool.allFeatures().find { it.id == id }?.label }
                 val removeFeatureLabels = removeTraitIds.mapNotNull { id -> DefaultFeaturePool.allFeatures().find { it.id == id }?.label }
 
@@ -249,6 +263,8 @@ private fun BoardState.toDetailDto() = BoardDetailDto(
     availableFeatures = BoardBalancer.availableFeatures(this).map {
         FeatureAvailabilityDto(it.feature.id, it.feature.label, it.available, it.reason)
     },
+    minTraitsPerCharacter = BoardBalancer.MIN_TRAITS_PER_CHARACTER,
+    maxTraitsPerCharacter = BoardBalancer.MAX_TRAITS_PER_CHARACTER,
 )
 
 private fun BoardSummary.toDto() = BoardSummaryDto(id, name, targetSize, characterCount, status.name, updatedAt)

@@ -3,12 +3,16 @@ package com.guesswho.board
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation as ClientContentNegotiation
+import io.ktor.client.request.forms.MultiPartFormDataContent
+import io.ktor.client.request.forms.formData
 import io.ktor.client.request.get
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.Headers
 import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.install
@@ -24,8 +28,9 @@ import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * Exercises [boardRoutes] end-to-end against an [InMemoryBoardRepository], so these run without
- * GCP credentials. Doesn't cover `/characters` (it calls Gemini directly), only board
- * create/list/get/complete.
+ * GCP credentials. `/characters` is only covered up to its trait-count validation, which runs
+ * before the Gemini call — the happy path (actually generating a portrait) isn't covered here
+ * since it calls Gemini directly.
  */
 class BoardRoutesTest {
 
@@ -100,6 +105,57 @@ class BoardRoutesTest {
         val listResponse = client.get("/api/boards")
         assertEquals(HttpStatusCode.OK, listResponse.status)
         assertTrue(listResponse.bodyAsText().contains("Office"))
+    }
+
+    @Test
+    fun `creating a character with too few features is rejected before calling Gemini`() = testApplication {
+        application { installBoardRoutes() }
+
+        val createResponse = client.post("/api/boards") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"name":"The Smiths","targetSize":12}""")
+        }
+        val id = Json.parseToJsonElement(createResponse.bodyAsText()).jsonObject.getValue("id").jsonPrimitive.content
+
+        // No GEMINI_API_KEY is set in this test environment, so a 400 here (rather than the
+        // 500 the missing-key check would produce) proves the trait-count check runs first.
+        val response = client.post("/api/boards/$id/characters") {
+            setBody(MultiPartFormDataContent(formData {
+                append("image", byteArrayOf(1, 2, 3), Headers.build {
+                    append(HttpHeaders.ContentType, "image/png")
+                    append(HttpHeaders.ContentDisposition, "filename=photo.png")
+                })
+                append("traits", """["glasses","hat"]""")
+            }))
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        assertTrue(response.bodyAsText().contains("between 5 and 8"))
+    }
+
+    @Test
+    fun `creating a character with too many features is rejected`() = testApplication {
+        application { installBoardRoutes() }
+
+        val createResponse = client.post("/api/boards") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"name":"The Smiths","targetSize":12}""")
+        }
+        val id = Json.parseToJsonElement(createResponse.bodyAsText()).jsonObject.getValue("id").jsonPrimitive.content
+
+        val nineTraits = """["glasses","hat","facial_hair","long_hair","hair_light","eyes_big","big_nose","big_ears","curly_hair"]"""
+        val response = client.post("/api/boards/$id/characters") {
+            setBody(MultiPartFormDataContent(formData {
+                append("image", byteArrayOf(1, 2, 3), Headers.build {
+                    append(HttpHeaders.ContentType, "image/png")
+                    append(HttpHeaders.ContentDisposition, "filename=photo.png")
+                })
+                append("traits", nineTraits)
+            }))
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        assertTrue(response.bodyAsText().contains("between 5 and 8"))
     }
 
     @Test

@@ -8,6 +8,12 @@ package com.guesswho.board
  */
 object BoardBalancer {
 
+    /** A character with too few traits is hard to distinguish from others; too many makes
+     * every guess trivial. Flat numbers rather than derived from board size or pool size —
+     * see the maintainer discussion that settled on this instead of a computed value. */
+    const val MIN_TRAITS_PER_CHARACTER = 5
+    const val MAX_TRAITS_PER_CHARACTER = 8
+
     fun slotsRemaining(board: BoardState): Int =
         (board.targetSize - board.characters.size).coerceAtLeast(0)
 
