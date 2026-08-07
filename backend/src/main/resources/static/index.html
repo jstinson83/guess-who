@@ -42,33 +42,46 @@
       </div>
 
       <div class="panel">
-        <label class="field-label">Characters on this board</label>
         <div id="characterGrid" class="character-grid"></div>
       </div>
+
+      <div class="fab-container" id="fabContainer">
+        <input type="file" id="uploadInput" accept="image/*" class="hidden" />
+        <input type="file" id="cameraInput" accept="image/*" capture="environment" class="hidden" />
+        <button class="fab-option" id="fabUpload" title="Upload a photo">&#128247;</button>
+        <button class="fab-option" id="fabCamera" title="Take a photo">&#128248;</button>
+        <button class="fab-main" id="fabMain" aria-label="Add a character">+</button>
+      </div>
+    </section>
+
+    <!-- Crop photo -->
+    <section id="cropView" class="hidden">
+      <button class="link-btn" id="cropBackBtn">&larr; Cancel</button>
+      <h1>Crop photo</h1>
+      <p class="subtitle">Frame their face and shoulders, then confirm.</p>
+      <div id="cropContainer"><img id="cropImage" alt="" /></div>
+      <button id="confirmCropBtn" disabled>Use this crop</button>
+    </section>
+
+    <!-- Pick features -->
+    <section id="featuresView" class="hidden">
+      <button class="link-btn" id="featuresBackBtn">&larr; Cancel</button>
+      <h1>Pick features</h1>
 
       <div class="panel" id="addCharacterPanel">
         <div id="addCharacterOverlay" class="panel-overlay hidden">
           <div class="spinner"></div>
         </div>
-        <label class="field-label">Add a character</label>
 
-        <label class="field-label" for="personName">1. Their name</label>
+        <label class="field-label" for="personName">Their name</label>
         <input type="text" id="personName" placeholder="e.g. Jordan" />
 
-        <label class="field-label" for="fileInput">2. Choose a photo</label>
-        <input type="file" id="fileInput" accept="image/*" />
-        <div id="cropContainer"><img id="cropImage" alt="" /></div>
-        <button id="confirmCropBtn" class="hidden" disabled>Use this crop &amp; detect features</button>
+        <label class="field-label">Features</label>
+        <label class="field-hint">Features already at their target for this board are greyed out.</label>
+        <div class="traits" id="traits"></div>
 
-        <div id="featuresStep" class="hidden">
-          <label class="field-label">3. Pick features</label>
-          <label class="field-hint">Features already at their target for this board are greyed out.</label>
-          <div class="traits" id="traits"></div>
-
-          <button id="generateBtn">Generate portrait &amp; add to board</button>
-        </div>
+        <button id="generateBtn">Create character</button>
         <div id="status" class="status"></div>
-        <img id="resultImg" alt="Generated portrait" />
       </div>
     </section>
   </main>

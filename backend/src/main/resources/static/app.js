@@ -1,5 +1,7 @@
 const boardListView = document.getElementById('boardListView');
 const boardDetailView = document.getElementById('boardDetailView');
+const cropView = document.getElementById('cropView');
+const featuresView = document.getElementById('featuresView');
 const boardList = document.getElementById('boardList');
 const createBoardStatus = document.getElementById('createBoardStatus');
 
@@ -8,33 +10,57 @@ const boardMetaEl = document.getElementById('boardMeta');
 const characterGrid = document.getElementById('characterGrid');
 const traitsEl = document.getElementById('traits');
 
-const fileInput = document.getElementById('fileInput');
+const fabContainer = document.getElementById('fabContainer');
+const fabMain = document.getElementById('fabMain');
+const fabCamera = document.getElementById('fabCamera');
+const fabUpload = document.getElementById('fabUpload');
+const cameraInput = document.getElementById('cameraInput');
+const uploadInput = document.getElementById('uploadInput');
+
 const cropContainer = document.getElementById('cropContainer');
 const cropImage = document.getElementById('cropImage');
 const confirmCropBtn = document.getElementById('confirmCropBtn');
-const featuresStep = document.getElementById('featuresStep');
+const cropBackBtn = document.getElementById('cropBackBtn');
+
 const personNameInput = document.getElementById('personName');
 const generateBtn = document.getElementById('generateBtn');
 const statusEl = document.getElementById('status');
-const resultImg = document.getElementById('resultImg');
 const addCharacterPanel = document.getElementById('addCharacterPanel');
 const addCharacterOverlay = document.getElementById('addCharacterOverlay');
+const featuresBackBtn = document.getElementById('featuresBackBtn');
 
 let cropper = null;
 let currentBoard = null;
 let detectedTraitIds = [];
 
-// --- Routing: '#/board/<id>' shows the detail view, anything else shows the list. ---
+// Photo picked from the FAB, waiting to be cropped.
+let pendingPhotoFile = null;
+// Cropped blobs (a small one for trait detection, a larger one for the final generate call),
+// produced together when the crop is confirmed so the cropper doesn't need to stay alive
+// across the crop -> features page transition.
+let pendingDetectBlob = null;
+let pendingFullBlob = null;
 
-function boardIdFromHash() {
-  const match = location.hash.match(/^#\/board\/(.+)$/);
-  return match ? match[1] : null;
+// --- Routing: '#/board/<id>' shows the detail view, '.../crop' and '.../features' are the
+// add-a-character wizard steps, anything else shows the board list. ---
+
+function showOnly(view) {
+  for (const v of [boardListView, boardDetailView, cropView, featuresView]) {
+    v.classList.toggle('hidden', v !== view);
+  }
 }
 
 async function route() {
-  const id = boardIdFromHash();
-  if (id) {
-    await showBoardDetail(id);
+  const cropMatch = location.hash.match(/^#\/board\/([^/]+)\/crop$/);
+  const featuresMatch = location.hash.match(/^#\/board\/([^/]+)\/features$/);
+  const detailMatch = location.hash.match(/^#\/board\/([^/]+)$/);
+
+  if (cropMatch) {
+    await showCropView(cropMatch[1]);
+  } else if (featuresMatch) {
+    await showFeaturesView(featuresMatch[1]);
+  } else if (detailMatch) {
+    await showBoardDetail(detailMatch[1]);
   } else {
     showBoardList();
   }
@@ -43,11 +69,19 @@ async function route() {
 window.addEventListener('hashchange', route);
 route();
 
+async function ensureBoardLoaded(id) {
+  if (currentBoard && currentBoard.id === id) return true;
+  const res = await fetch(`/api/boards/${id}`);
+  const board = await res.json();
+  if (!res.ok) return false;
+  currentBoard = board;
+  return true;
+}
+
 // --- Board list ---
 
 async function showBoardList() {
-  boardDetailView.classList.add('hidden');
-  boardListView.classList.remove('hidden');
+  showOnly(boardListView);
   currentBoard = null;
 
   boardList.innerHTML = '<p class="status">Loading boards…</p>';
@@ -113,16 +147,14 @@ document.getElementById('backToListBtn').addEventListener('click', () => {
   location.hash = '';
 });
 
-// --- Board detail ---
+// --- Board detail (landing page for a board: just the characters + a FAB to add one) ---
 
 async function showBoardDetail(id) {
-  boardListView.classList.add('hidden');
-  boardDetailView.classList.remove('hidden');
+  showOnly(boardDetailView);
 
   boardNameEl.textContent = 'Loading…';
   boardMetaEl.textContent = '';
   characterGrid.innerHTML = '';
-  traitsEl.innerHTML = '';
 
   try {
     const res = await fetch(`/api/boards/${id}`);
@@ -145,10 +177,9 @@ function renderBoardDetail() {
   completeBtn.disabled = board.status === 'COMPLETE';
   completeBtn.textContent = board.status === 'COMPLETE' ? 'Board complete' : 'Mark board complete';
 
-  addCharacterPanel.classList.toggle('hidden', board.status === 'COMPLETE');
+  fabContainer.classList.toggle('hidden', board.status === 'COMPLETE');
 
   renderCharacterGrid();
-  renderTraits();
 }
 
 function renderCharacterGrid() {
@@ -174,26 +205,6 @@ function renderCharacterGrid() {
   }
 }
 
-function renderTraits() {
-  traitsEl.innerHTML = '';
-  for (const feature of currentBoard.availableFeatures) {
-    const detected = detectedTraitIds.includes(feature.id);
-    let reason = feature.reason || '';
-    if (!feature.available && detected) {
-      reason = reason ? `${reason} — detected in photo, will be left out` : 'Detected in photo, will be left out';
-    }
-    const label = document.createElement('label');
-    label.className = 'switch' + (feature.available ? '' : ' switch-disabled');
-    label.title = reason;
-    label.innerHTML = `
-      <input type="checkbox" value="${feature.id}" ${feature.available ? '' : 'disabled'} ${feature.available && detected ? 'checked' : ''} />
-      <span class="switch-track"></span>${escapeHtml(feature.label)}
-      ${reason ? `<span class="switch-reason">${escapeHtml(reason)}</span>` : ''}
-    `;
-    traitsEl.appendChild(label);
-  }
-}
-
 document.getElementById('completeBoardBtn').addEventListener('click', async () => {
   if (!currentBoard) return;
   const res = await fetch(`/api/boards/${currentBoard.id}/complete`, { method: 'POST' });
@@ -203,10 +214,118 @@ document.getElementById('completeBoardBtn').addEventListener('click', async () =
   renderBoardDetail();
 });
 
-// --- Add a character (crop + traits + generate) ---
+// --- FAB: pick a photo (camera or upload), then bounce to the crop step ---
 
-// Detection only runs once the user explicitly confirms a crop (confirmCropBtn), not on
-// Cropper's default initial crop box — analyzing that produced bad results (see git history).
+fabMain.addEventListener('click', () => {
+  fabContainer.classList.toggle('fab-open');
+});
+
+fabCamera.addEventListener('click', () => {
+  fabContainer.classList.remove('fab-open');
+  cameraInput.click();
+});
+
+fabUpload.addEventListener('click', () => {
+  fabContainer.classList.remove('fab-open');
+  uploadInput.click();
+});
+
+function onPhotoChosen(e) {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file || !currentBoard) return;
+  pendingPhotoFile = file;
+  location.hash = `#/board/${currentBoard.id}/crop`;
+}
+
+cameraInput.addEventListener('change', onPhotoChosen);
+uploadInput.addEventListener('change', onPhotoChosen);
+
+// --- Crop step ---
+
+async function showCropView(id) {
+  const ok = await ensureBoardLoaded(id);
+  if (!ok || !pendingPhotoFile) {
+    location.hash = `#/board/${id}`;
+    return;
+  }
+  showOnly(cropView);
+
+  confirmCropBtn.disabled = true;
+  cropImage.src = URL.createObjectURL(pendingPhotoFile);
+
+  if (cropper) {
+    cropper.destroy();
+    cropper = null;
+  }
+  cropImage.onload = () => {
+    cropper = new Cropper(cropImage, {
+      aspectRatio: 1,
+      viewMode: 1,
+      ready() {
+        confirmCropBtn.disabled = false;
+      },
+    });
+  };
+}
+
+cropBackBtn.addEventListener('click', () => {
+  if (cropper) {
+    cropper.destroy();
+    cropper = null;
+  }
+  pendingPhotoFile = null;
+  if (currentBoard) location.hash = `#/board/${currentBoard.id}`;
+});
+
+confirmCropBtn.addEventListener('click', () => {
+  if (!cropper || !currentBoard) return;
+  confirmCropBtn.disabled = true;
+
+  const detectCanvas = cropper.getCroppedCanvas({ width: 512, height: 512 });
+  const fullCanvas = cropper.getCroppedCanvas({ width: 768, height: 768 });
+  detectCanvas.toBlob((detectBlob) => {
+    fullCanvas.toBlob((fullBlob) => {
+      pendingDetectBlob = detectBlob;
+      pendingFullBlob = fullBlob;
+      pendingPhotoFile = null;
+      if (cropper) {
+        cropper.destroy();
+        cropper = null;
+      }
+      location.hash = `#/board/${currentBoard.id}/features`;
+    }, 'image/png');
+  }, 'image/png');
+});
+
+// --- Features step: spinner while Gemini detects traits, then pick features and create ---
+
+async function showFeaturesView(id) {
+  const ok = await ensureBoardLoaded(id);
+  if (!ok || !pendingDetectBlob || !pendingFullBlob) {
+    location.hash = `#/board/${id}`;
+    return;
+  }
+  showOnly(featuresView);
+
+  personNameInput.value = '';
+  statusEl.textContent = '';
+  statusEl.className = 'status';
+  detectedTraitIds = [];
+  traitsEl.innerHTML = '';
+  generateBtn.disabled = false;
+
+  await autoDetectTraits(pendingDetectBlob);
+}
+
+featuresBackBtn.addEventListener('click', () => {
+  pendingDetectBlob = null;
+  pendingFullBlob = null;
+  if (currentBoard) location.hash = `#/board/${currentBoard.id}`;
+});
+
+// Detection only runs once the user has confirmed and cropped a photo, not on Cropper's
+// default initial crop box — analyzing that produced bad results (see git history).
 async function autoDetectTraits(blob) {
   if (!currentBoard) return;
 
@@ -233,106 +352,67 @@ async function autoDetectTraits(blob) {
   } finally {
     addCharacterPanel.classList.remove('busy');
     addCharacterOverlay.classList.add('hidden');
-    confirmCropBtn.classList.add('hidden');
-    featuresStep.classList.remove('hidden');
     renderTraits();
   }
 }
 
-fileInput.addEventListener('change', () => {
-  const file = fileInput.files[0];
-  if (!file) return;
-
-  const url = URL.createObjectURL(file);
-  cropImage.src = url;
-  cropContainer.style.display = 'block';
-  resultImg.style.display = 'none';
-  statusEl.textContent = '';
-  statusEl.className = 'status';
-  detectedTraitIds = [];
-  featuresStep.classList.add('hidden');
-  confirmCropBtn.classList.remove('hidden');
-  confirmCropBtn.disabled = true;
-
-  if (cropper) cropper.destroy();
-  cropImage.onload = () => {
-    cropper = new Cropper(cropImage, {
-      aspectRatio: 1,
-      viewMode: 1,
-      ready() {
-        confirmCropBtn.disabled = false;
-      },
-    });
-  };
-});
-
-confirmCropBtn.addEventListener('click', () => {
-  if (!cropper) return;
-
-  confirmCropBtn.disabled = true;
-  cropper.disable();
-
-  const canvas = cropper.getCroppedCanvas({ width: 512, height: 512 });
-  canvas.toBlob((blob) => {
-    if (blob) autoDetectTraits(blob);
-  }, 'image/png');
-});
+function renderTraits() {
+  traitsEl.innerHTML = '';
+  for (const feature of currentBoard.availableFeatures) {
+    const detected = detectedTraitIds.includes(feature.id);
+    let reason = feature.reason || '';
+    if (!feature.available && detected) {
+      reason = reason ? `${reason} — detected in photo, will be left out` : 'Detected in photo, will be left out';
+    }
+    const label = document.createElement('label');
+    label.className = 'switch' + (feature.available ? '' : ' switch-disabled');
+    label.title = reason;
+    label.innerHTML = `
+      <input type="checkbox" value="${feature.id}" ${feature.available ? '' : 'disabled'} ${feature.available && detected ? 'checked' : ''} />
+      <span class="switch-track"></span>${escapeHtml(feature.label)}
+      ${reason ? `<span class="switch-reason">${escapeHtml(reason)}</span>` : ''}
+    `;
+    traitsEl.appendChild(label);
+  }
+}
 
 generateBtn.addEventListener('click', async () => {
-  if (!cropper || !currentBoard) return;
+  if (!pendingFullBlob || !currentBoard) return;
 
   const traits = Array.from(document.querySelectorAll('#traits input:checked:not(:disabled)')).map((el) => el.value);
   const removeTraits = detectedTraitIds.filter((id) => !traits.includes(id));
   const name = personNameInput.value.trim();
 
-  const canvas = cropper.getCroppedCanvas({ width: 768, height: 768 });
-  canvas.toBlob(async (blob) => {
-    const form = new FormData();
-    form.append('image', blob, 'photo.png');
-    form.append('name', name);
-    form.append('traits', JSON.stringify(traits));
-    form.append('removeTraits', JSON.stringify(removeTraits));
+  const form = new FormData();
+  form.append('image', pendingFullBlob, 'photo.png');
+  form.append('name', name);
+  form.append('traits', JSON.stringify(traits));
+  form.append('removeTraits', JSON.stringify(removeTraits));
 
-    generateBtn.disabled = true;
-    addCharacterPanel.classList.add('busy');
-    addCharacterOverlay.classList.remove('hidden');
-    statusEl.textContent = 'Generating…';
-    statusEl.className = 'status';
-    resultImg.style.display = 'none';
+  generateBtn.disabled = true;
+  addCharacterPanel.classList.add('busy');
+  addCharacterOverlay.classList.remove('hidden');
+  statusEl.textContent = 'Generating…';
+  statusEl.className = 'status';
 
-    try {
-      const res = await fetch(`/api/boards/${currentBoard.id}/characters`, { method: 'POST', body: form });
-      const board = await res.json();
-      if (!res.ok) throw new Error(board.error || 'Request failed');
+  try {
+    const res = await fetch(`/api/boards/${currentBoard.id}/characters`, { method: 'POST', body: form });
+    const board = await res.json();
+    if (!res.ok) throw new Error(board.error || 'Request failed');
 
-      currentBoard = board;
-      const added = board.characters[board.characters.length - 1];
-      resultImg.src = added.portraitUrl;
-      resultImg.style.display = 'block';
-      statusEl.textContent = `Added ${added.name || 'character'} to the board.`;
-
-      personNameInput.value = '';
-      fileInput.value = '';
-      cropContainer.style.display = 'none';
-      detectedTraitIds = [];
-      featuresStep.classList.add('hidden');
-      confirmCropBtn.classList.add('hidden');
-      if (cropper) {
-        cropper.destroy();
-        cropper = null;
-      }
-      renderCharacterGrid();
-      renderTraits();
-      boardMetaEl.textContent = `${currentBoard.characters.length}/${currentBoard.targetSize} characters · In progress`;
-    } catch (err) {
-      statusEl.textContent = err.message;
-      statusEl.className = 'status error';
-    } finally {
-      generateBtn.disabled = false;
-      addCharacterPanel.classList.remove('busy');
-      addCharacterOverlay.classList.add('hidden');
-    }
-  }, 'image/png');
+    currentBoard = board;
+    pendingDetectBlob = null;
+    pendingFullBlob = null;
+    detectedTraitIds = [];
+    location.hash = `#/board/${currentBoard.id}`;
+  } catch (err) {
+    statusEl.textContent = err.message;
+    statusEl.className = 'status error';
+  } finally {
+    generateBtn.disabled = false;
+    addCharacterPanel.classList.remove('busy');
+    addCharacterOverlay.classList.add('hidden');
+  }
 });
 
 function escapeHtml(str) {
