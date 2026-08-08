@@ -8,6 +8,7 @@
   --accent-hover: #c22a21;
   --accent-2: #ffc93c;
   --navy: #1f3f6e;
+  --navy-soft: rgba(31, 63, 110, 0.12);
   --border: #ecdfc0;
   --good: #3a8f47;
   --warn: #b8790a;
@@ -177,11 +178,12 @@ section.hidden {
 }
 
 .character-card {
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  border: 3px solid var(--navy);
+  border-radius: 20px;
   overflow: hidden;
   background: var(--bg);
   cursor: pointer;
+  box-shadow: 0 3px 0 var(--navy-soft);
   transition: border-color 0.15s ease;
 }
 
@@ -207,12 +209,55 @@ section.hidden {
   font-weight: 600;
   padding: 0.5rem 0.6rem 0;
   font-size: 0.9rem;
+  color: var(--navy);
 }
 
 .character-card-traits {
   color: var(--muted);
   font-size: 0.78rem;
   padding: 0.15rem 0.6rem 0.6rem;
+}
+
+/* Full reskin: corner stripe decoration behind the character grid, using the game design
+   system's stripe pattern via pseudo-elements so no extra markup is needed. Scoped to
+   .character-panel (board detail only) so it doesn't leak into other .panel uses. */
+.character-panel {
+  position: relative;
+  overflow: hidden;
+}
+
+.character-panel::before,
+.character-panel::after {
+  content: '';
+  position: absolute;
+  width: 90px;
+  height: 90px;
+  opacity: 0.16;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    -45deg,
+    var(--navy) 0,
+    var(--navy) 5px,
+    transparent 5px,
+    transparent 12px
+  );
+}
+
+.character-panel::before {
+  top: 0;
+  left: 0;
+  clip-path: polygon(0 0, 100% 0, 0 100%);
+}
+
+.character-panel::after {
+  bottom: 0;
+  right: 0;
+  clip-path: polygon(100% 100%, 100% 0, 0 100%);
+}
+
+.character-panel .character-grid {
+  position: relative;
+  z-index: 1;
 }
 
 .switch-disabled {
@@ -581,7 +626,6 @@ button:disabled {
    ========================================================================== */
 
 :root {
-  --navy-soft: rgba(31, 63, 110, 0.12);
   --game-card-radius: 20px;
 }
 
