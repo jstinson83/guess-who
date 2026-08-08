@@ -173,6 +173,17 @@ section.hidden {
   margin-bottom: 0.15rem;
 }
 
+.board-complete-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 2rem;
+  margin-bottom: 1.25rem;
+}
+
+.board-complete-actions #completeBoardBtn {
+  padding: 0.9rem 2.5rem;
+}
+
 .character-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
