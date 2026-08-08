@@ -51,6 +51,7 @@
 
       <div class="board-complete-actions">
         <button id="completeBoardBtn">Mark board complete</button>
+        <a class="hidden" id="playBoardBtn" href="">Play</a>
       </div>
 
       <div class="fab-container" id="fabContainer">
@@ -105,6 +106,13 @@
         <div id="status" class="status"></div>
       </div>
     </section>
+
+    <!-- Pass-and-play game: one content container, re-rendered per phase by app.js
+         (setup picks, pass-device interstitials, play, game over). -->
+    <section id="gameView" class="hidden">
+      <button class="link-btn" id="gameBackBtn">&larr; Board</button>
+      <div id="gameContent"></div>
+    </section>
   </main>
 
   <!-- Character modal: shown on successful create, and when a board tile is clicked -->
@@ -118,6 +126,7 @@
   </div>
 
   <script src="/vendor/cropper.min.js"></script>
+  <script src="/templates.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

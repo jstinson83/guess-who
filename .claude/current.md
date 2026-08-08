@@ -10,12 +10,9 @@ breaks down.
 
 ## Active task
 
-None currently — the maintainer's last active-task plan (running trait
-counts/targets in the UI, flat min/max trait count enforcement, a
-non-blocking duplicate-character warning) is done; see "Balanced
-additions" below for what landed. Consult the "Future roadmap" below for
-the working breakdown of the spec, in roughly the order the spec's own
-workflow implies.
+None currently — the maintainer's last active-task plan (pass-and-play game
+screen from a completed board) is done; see "Game generation" below for
+what landed.
 
 ## Future roadmap (not yet started, no priority/timeline set)
 
@@ -90,7 +87,9 @@ spec, not a maintainer commitment.
 
 ### Game generation
 
-- [ ] Generate a playable mobile game from a completed board
+- [x] Generate a playable mobile game from a completed board — pass-and-play
+      only so far (`#/board/<id>/play` in `static/app.js`); see
+      `context.md`'s Major features for the design
 - [ ] Save and edit generated games
 
 ## Ideas under discussion (not yet scoped, not in the spec)

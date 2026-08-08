@@ -102,11 +102,21 @@ version and then rebuilt with boards + Firestore in a later session — see
   same project, not the same deploy. `GEMINI_API_KEY` is a Secret Manager
   secret read at deploy time, not baked into the image.
 - **Frontend has no build step**: `backend/src/main/resources/static/` is
-  served directly (`index.html`, `app.js`, `styles.css`, vendored
-  `Cropper.js` — no CDN dependency). Any new frontend work should keep
-  this pattern unless the roadmap work makes a lightweight build step
+  served directly (`index.html`, `app.js`, `templates.js`, `styles.css`,
+  vendored `Cropper.js` — no CDN dependency). Any new frontend work should
+  keep this pattern unless the roadmap work makes a lightweight build step
   clearly worth it — don't introduce a framework/bundler for a small
   change.
+  - **Markup lives in `templates.js`, not inline in `app.js`**: every
+    `data -> HTML string` function (board cards, character cards, feature
+    balance pills, trait switches, the pass-and-play game screens) is in
+    `templates.js`, loaded as a plain global script before `app.js` (same
+    no-module, no-bundler pattern as everything else here). `app.js` calls
+    these and handles DOM insertion/event wiring, but shouldn't grow new
+    template-literal HTML of its own — add the markup function to
+    `templates.js` instead. Deliberately kept as plain functions of data
+    (not `<template>`-element cloning) so this is an easy, mechanical port
+    to a component framework later if the app ever outgrows vanilla JS.
 - **Firestore persistence**: boards live in a `boards` collection; each
   board's characters live in a `characters` subcollection underneath it
   (not a top-level collection), since every read pattern is scoped to one
