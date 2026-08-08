@@ -571,6 +571,217 @@ button:disabled {
   width: 100%;
 }
 
+/* ==========================================================================
+   Game UI design system
+   Reusable tokens/components pulled from a reference gameplay-screen mock
+   (card grid, question panel, guess counter, corner decorations). Not wired
+   into a page yet — see .claude/current.md's "Game generation" roadmap item.
+   Built on the existing palette above (--navy/--accent/--accent-2/--bg)
+   rather than introducing a second one.
+   ========================================================================== */
+
+:root {
+  --navy-soft: rgba(31, 63, 110, 0.12);
+  --game-card-radius: 20px;
+}
+
+/* --- Game card: portrait tile with a heavier "board piece" border --- */
+
+.game-card {
+  background: var(--surface);
+  border: 3px solid var(--navy);
+  border-radius: var(--game-card-radius);
+  padding: 0.4rem;
+  box-shadow: 0 3px 0 var(--navy-soft);
+}
+
+.game-card img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: calc(var(--game-card-radius) - 6px);
+  background: #000;
+}
+
+.game-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 0.75rem;
+}
+
+/* Face-down state, for a card not yet eliminated/revealed */
+.game-card-facedown {
+  border-color: var(--border);
+  filter: grayscale(1) opacity(0.55);
+}
+
+/* --- Question panel (e.g. "Ask" / "Answer") --- */
+
+.question-panel {
+  background: var(--surface);
+  border: 2px solid var(--navy);
+  border-radius: 16px;
+  padding: 1rem 1.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.question-panel-title {
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 500;
+  font-size: 1rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--navy);
+  margin: 0;
+}
+
+.question-panel-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.btn-ask,
+.btn-answer {
+  width: 100%;
+}
+
+.btn-answer {
+  background: var(--accent-2);
+  color: #4a3b00;
+}
+
+.btn-answer:hover:not(:disabled) {
+  background: #f2b81f;
+}
+
+/* --- Guess counter --- */
+
+.counter {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--surface);
+  border: 2px solid var(--navy);
+  border-radius: 16px;
+  padding: 0.65rem 1rem;
+}
+
+.counter-label {
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 500;
+  font-size: 0.82rem;
+  color: var(--navy);
+}
+
+.counter-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.counter-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: none;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1rem;
+  line-height: 1;
+  color: #fff;
+  cursor: pointer;
+}
+
+.counter-btn-decrement {
+  background: var(--accent);
+}
+
+.counter-btn-decrement:hover {
+  background: var(--accent-hover);
+}
+
+.counter-btn-increment {
+  background: var(--accent-2);
+  color: #4a3b00;
+}
+
+.counter-btn-increment:hover {
+  background: #f2b81f;
+}
+
+.counter-value {
+  min-width: 1.4em;
+  text-align: center;
+  font-family: 'Fredoka', sans-serif;
+  font-weight: 500;
+  font-size: 1.2rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+/* --- Decorative corner/background elements ---
+   Absolutely-position these inside a `position: relative` container. Each
+   is a plain div with no content; size via width/height in the page that
+   uses them. */
+
+.deco-stripes {
+  position: absolute;
+  overflow: hidden;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    -45deg,
+    var(--navy) 0,
+    var(--navy) 5px,
+    transparent 5px,
+    transparent 12px
+  );
+}
+
+.deco-stripes--corner-tl {
+  top: 0;
+  left: 0;
+  clip-path: polygon(0 0, 100% 0, 0 100%);
+}
+
+.deco-stripes--corner-br {
+  bottom: 0;
+  right: 0;
+  clip-path: polygon(100% 100%, 100% 0, 0 100%);
+}
+
+.deco-dots {
+  position: absolute;
+  pointer-events: none;
+  background-image: radial-gradient(var(--navy) 1.4px, transparent 1.4px);
+  background-size: 13px 13px;
+  opacity: 0.35;
+}
+
+.deco-ring {
+  position: absolute;
+  pointer-events: none;
+  border-radius: 50%;
+  border: 2px solid var(--navy);
+  opacity: 0.5;
+}
+
+.deco-plus {
+  position: absolute;
+  pointer-events: none;
+  color: var(--navy);
+  opacity: 0.5;
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
 @media (max-width: 480px) {
   body {
     padding: 1.25rem 0.85rem 2rem;
