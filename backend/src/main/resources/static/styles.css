@@ -7,7 +7,9 @@
   --accent: #e0342c;
   --accent-hover: #c22a21;
   --accent-2: #ffc93c;
+  --accent-2-hover: #f2b81f;
   --navy: #1f3f6e;
+  --navy-soft: rgba(31, 63, 110, 0.12);
   --border: #ecdfc0;
   --good: #3a8f47;
   --warn: #b8790a;
@@ -19,7 +21,7 @@
 
 body {
   margin: 0;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Nunito', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background: var(--bg);
   color: var(--text);
   padding: 2rem 1rem 3rem;
@@ -31,8 +33,8 @@ main {
 }
 
 h1 {
-  font-family: 'Fredoka', sans-serif;
-  font-weight: 500;
+  font-family: 'Sniglet', sans-serif;
+  font-weight: 800;
   font-size: 2rem;
   color: var(--navy);
   margin: 0 0 0.35rem;
@@ -75,6 +77,7 @@ section.hidden {
   padding: 0;
   margin-bottom: 1rem;
   cursor: pointer;
+  box-shadow: none;
 }
 
 .link-btn:hover {
@@ -129,8 +132,8 @@ section.hidden {
 }
 
 .board-card-name {
-  font-family: 'Fredoka', sans-serif;
-  font-weight: 500;
+  font-family: 'Sniglet', sans-serif;
+  font-weight: 800;
   font-size: 1.05rem;
   color: var(--navy);
 }
@@ -177,11 +180,12 @@ section.hidden {
 }
 
 .character-card {
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  border: 3px solid var(--navy);
+  border-radius: 20px;
   overflow: hidden;
   background: var(--bg);
   cursor: pointer;
+  box-shadow: 0 3px 0 var(--navy-soft);
   transition: border-color 0.15s ease;
 }
 
@@ -207,12 +211,55 @@ section.hidden {
   font-weight: 600;
   padding: 0.5rem 0.6rem 0;
   font-size: 0.9rem;
+  color: var(--navy);
 }
 
 .character-card-traits {
   color: var(--muted);
   font-size: 0.78rem;
   padding: 0.15rem 0.6rem 0.6rem;
+}
+
+/* Full reskin: corner stripe decoration behind the character grid, using the game design
+   system's stripe pattern via pseudo-elements so no extra markup is needed. Scoped to
+   .character-panel (board detail only) so it doesn't leak into other .panel uses. */
+.character-panel {
+  position: relative;
+  overflow: hidden;
+}
+
+.character-panel::before,
+.character-panel::after {
+  content: '';
+  position: absolute;
+  width: 90px;
+  height: 90px;
+  opacity: 0.7;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    -45deg,
+    var(--navy) 0,
+    var(--navy) 5px,
+    transparent 5px,
+    transparent 12px
+  );
+}
+
+.character-panel::before {
+  top: 0;
+  left: 0;
+  clip-path: polygon(0 0, 100% 0, 0 100%);
+}
+
+.character-panel::after {
+  bottom: 0;
+  right: 0;
+  clip-path: polygon(100% 100%, 100% 0, 0 100%);
+}
+
+.character-panel .character-grid {
+  position: relative;
+  z-index: 1;
 }
 
 .switch-disabled {
@@ -292,8 +339,8 @@ section.hidden {
 
 label.field-label {
   display: block;
-  font-family: 'Fredoka', sans-serif;
-  font-weight: 500;
+  font-family: 'Sniglet', sans-serif;
+  font-weight: 800;
   font-size: 1.05rem;
   color: var(--navy);
   margin-bottom: 0.75rem;
@@ -405,10 +452,20 @@ button {
   background: var(--accent);
   color: #fff;
   cursor: pointer;
+  box-shadow: 0 4px 0 var(--accent-hover);
+  transform: translateY(0);
+  transition: transform 0.08s ease, box-shadow 0.08s ease, background 0.15s ease;
 }
 
 button:hover:not(:disabled) {
   background: var(--accent-hover);
+}
+
+/* Chunky "pop" press: excludes the small circular/icon buttons and the plain text
+   link-btn, which reset box-shadow to none below and shouldn't animate. */
+button:active:not(:disabled):not(.fab-main):not(.fab-option):not(.counter-btn):not(.link-btn) {
+  transform: translateY(4px);
+  box-shadow: 0 0 0 var(--accent-hover);
 }
 
 button:disabled {
@@ -545,8 +602,8 @@ button:disabled {
 }
 
 .modal h2 {
-  font-family: 'Fredoka', sans-serif;
-  font-weight: 500;
+  font-family: 'Sniglet', sans-serif;
+  font-weight: 800;
   font-size: 1.4rem;
   color: var(--navy);
   margin: 0 0 1rem;
@@ -581,7 +638,6 @@ button:disabled {
    ========================================================================== */
 
 :root {
-  --navy-soft: rgba(31, 63, 110, 0.12);
   --game-card-radius: 20px;
 }
 
@@ -629,8 +685,8 @@ button:disabled {
 }
 
 .question-panel-title {
-  font-family: 'Fredoka', sans-serif;
-  font-weight: 500;
+  font-family: 'Sniglet', sans-serif;
+  font-weight: 800;
   font-size: 1rem;
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -652,10 +708,15 @@ button:disabled {
 .btn-answer {
   background: var(--accent-2);
   color: #4a3b00;
+  box-shadow: 0 4px 0 var(--accent-2-hover);
 }
 
 .btn-answer:hover:not(:disabled) {
-  background: #f2b81f;
+  background: var(--accent-2-hover);
+}
+
+.btn-answer:active:not(:disabled) {
+  box-shadow: 0 0 0 var(--accent-2-hover);
 }
 
 /* --- Guess counter --- */
@@ -672,8 +733,8 @@ button:disabled {
 }
 
 .counter-label {
-  font-family: 'Fredoka', sans-serif;
-  font-weight: 500;
+  font-family: 'Sniglet', sans-serif;
+  font-weight: 800;
   font-size: 0.82rem;
   color: var(--navy);
 }
@@ -698,6 +759,7 @@ button:disabled {
   line-height: 1;
   color: #fff;
   cursor: pointer;
+  box-shadow: none;
 }
 
 .counter-btn-decrement {
@@ -714,14 +776,14 @@ button:disabled {
 }
 
 .counter-btn-increment:hover {
-  background: #f2b81f;
+  background: var(--accent-2-hover);
 }
 
 .counter-value {
   min-width: 1.4em;
   text-align: center;
-  font-family: 'Fredoka', sans-serif;
-  font-weight: 500;
+  font-family: 'Sniglet', sans-serif;
+  font-weight: 800;
   font-size: 1.2rem;
   font-variant-numeric: tabular-nums;
   color: var(--text);
