@@ -32,6 +32,11 @@ const traitsCountEl = document.getElementById('traitsCount');
 const duplicateWarningEl = document.getElementById('duplicateWarning');
 const featureBalanceGrid = document.getElementById('featureBalanceGrid');
 
+const newCharacterModal = document.getElementById('newCharacterModal');
+const newCharacterPortrait = document.getElementById('newCharacterPortrait');
+const newCharacterName = document.getElementById('newCharacterName');
+const newCharacterDismissBtn = document.getElementById('newCharacterDismissBtn');
+
 let cropper = null;
 let currentBoard = null;
 let detectedTraitIds = [];
@@ -54,6 +59,8 @@ function showOnly(view) {
 }
 
 async function route() {
+  newCharacterModal.classList.add('hidden');
+
   const cropMatch = location.hash.match(/^#\/board\/([^/]+)\/crop$/);
   const featuresMatch = location.hash.match(/^#\/board\/([^/]+)\/features$/);
   const detailMatch = location.hash.match(/^#\/board\/([^/]+)$/);
@@ -489,7 +496,7 @@ generateBtn.addEventListener('click', async () => {
     pendingDetectBlob = null;
     pendingFullBlob = null;
     detectedTraitIds = [];
-    location.hash = `#/board/${currentBoard.id}`;
+    showNewCharacterModal(board.characters[board.characters.length - 1]);
   } catch (err) {
     statusEl.textContent = err.message;
     statusEl.className = 'status error';
@@ -498,6 +505,25 @@ generateBtn.addEventListener('click', async () => {
     addCharacterPanel.classList.remove('busy');
     addCharacterOverlay.classList.add('hidden');
   }
+});
+
+// --- New character modal: shown on successful create, dismissing returns to the board ---
+
+function showNewCharacterModal(character) {
+  newCharacterPortrait.src = character.portraitUrl || '';
+  newCharacterPortrait.alt = character.name || '';
+  newCharacterName.textContent = character.name || 'Unnamed';
+  newCharacterModal.classList.remove('hidden');
+}
+
+function dismissNewCharacterModal() {
+  newCharacterModal.classList.add('hidden');
+  if (currentBoard) location.hash = `#/board/${currentBoard.id}`;
+}
+
+newCharacterDismissBtn.addEventListener('click', dismissNewCharacterModal);
+newCharacterModal.addEventListener('click', (e) => {
+  if (e.target === newCharacterModal) dismissNewCharacterModal();
 });
 
 function escapeHtml(str) {
