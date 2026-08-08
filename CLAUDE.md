@@ -94,6 +94,24 @@ version and then rebuilt with boards + Firestore in a later session — see
   release schedule outside our control; if either endpoint starts
   returning 404 for its model, check
   https://ai.google.dev/gemini-api/docs/models for the current name.
+- **Frontend tests**: Playwright, in `tests/` at the repo root (`package.json`
+  + `playwright.config.js` are also repo-root, not under `backend/`, since
+  they test the static files directly rather than anything Kotlin). Run
+  with `npm install && npm test` — see `README.md`. Every backend call the
+  app makes is intercepted with `page.route()` and fed fixture data, so
+  these never hit Ktor/Firestore/Gemini, mirroring how the backend's own
+  tests swap in `InMemoryBoardRepository` instead of real Firestore. This is
+  dev-only tooling, not a build step for the deployed app — doesn't
+  contradict the "no build step" point below.
+  - **In a Claude Code remote environment**: Chromium is preinstalled
+    outside Playwright's normal cache (`PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers`),
+    so `npx playwright install` isn't needed and may even try to redownload
+    unnecessarily. Run tests with
+    `PLAYWRIGHT_CHROMIUM_PATH=/opt/pw-browsers/chromium npm test` to point
+    the `chromium` project at the preinstalled browser directly
+    (`playwright.config.js` reads that env var; it's unset by default so a
+    normal dev machine/CI still uses Playwright's own managed browser via
+    `npx playwright install chromium`).
 - **Deploy pipeline**: fully documented in `README.md` (Cloud Build →
   Artifact Registry → Cloud Run, one-time GCP setup steps). This repo
   shares the `foodie-503510` GCP project and its
