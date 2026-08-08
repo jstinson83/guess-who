@@ -181,6 +181,18 @@ section.hidden {
   border-radius: 12px;
   overflow: hidden;
   background: var(--bg);
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.character-card:hover,
+.character-card:focus-visible {
+  border-color: var(--accent);
+}
+
+.character-card:focus-visible {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 2px;
 }
 
 .character-card img {
@@ -292,6 +304,17 @@ label.field-hint {
   color: var(--muted);
   font-size: 0.85rem;
   margin: -0.5rem 0 0.75rem;
+}
+
+#personName {
+  display: block;
+  font: inherit;
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  margin-bottom: 0.75rem;
 }
 
 input[type='file'] {
@@ -538,7 +561,7 @@ button:disabled {
   display: block;
 }
 
-.modal-name {
+.modal-subtitle {
   font-weight: 600;
   font-size: 1.1rem;
   margin: 0.85rem 0 1.25rem;

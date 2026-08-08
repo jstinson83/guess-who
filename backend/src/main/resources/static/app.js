@@ -32,10 +32,11 @@ const traitsCountEl = document.getElementById('traitsCount');
 const duplicateWarningEl = document.getElementById('duplicateWarning');
 const featureBalanceGrid = document.getElementById('featureBalanceGrid');
 
-const newCharacterModal = document.getElementById('newCharacterModal');
-const newCharacterPortrait = document.getElementById('newCharacterPortrait');
-const newCharacterName = document.getElementById('newCharacterName');
-const newCharacterDismissBtn = document.getElementById('newCharacterDismissBtn');
+const characterModal = document.getElementById('characterModal');
+const characterModalTitle = document.getElementById('characterModalTitle');
+const characterModalPortrait = document.getElementById('characterModalPortrait');
+const characterModalSubtitle = document.getElementById('characterModalSubtitle');
+const characterModalDismissBtn = document.getElementById('characterModalDismissBtn');
 
 let cropper = null;
 let currentBoard = null;
@@ -59,7 +60,7 @@ function showOnly(view) {
 }
 
 async function route() {
-  newCharacterModal.classList.add('hidden');
+  characterModal.classList.add('hidden');
 
   const cropMatch = location.hash.match(/^#\/board\/([^/]+)\/crop$/);
   const featuresMatch = location.hash.match(/^#\/board\/([^/]+)\/features$/);
@@ -209,6 +210,12 @@ function renderFeatureBalance() {
   }
 }
 
+function traitLabelsFor(character) {
+  return character.traits
+    .map((id) => currentBoard.featureStatuses.find((f) => f.id === id)?.label || id)
+    .join(', ');
+}
+
 function renderCharacterGrid() {
   const characters = currentBoard.characters;
   if (characters.length === 0) {
@@ -220,9 +227,10 @@ function renderCharacterGrid() {
   for (const character of characters) {
     const card = document.createElement('div');
     card.className = 'character-card';
-    const traitLabels = character.traits
-      .map((id) => currentBoard.featureStatuses.find((f) => f.id === id)?.label || id)
-      .join(', ');
+    card.dataset.id = character.id;
+    card.tabIndex = 0;
+    card.setAttribute('role', 'button');
+    const traitLabels = traitLabelsFor(character);
     card.innerHTML = `
       <img src="${character.portraitUrl || ''}" alt="${escapeHtml(character.name)}" />
       <div class="character-card-name">${escapeHtml(character.name || 'Unnamed')}</div>
@@ -231,6 +239,32 @@ function renderCharacterGrid() {
     characterGrid.appendChild(card);
   }
 }
+
+// Clicking (or keyboard-activating) a tile reopens the same modal used after creation, with
+// the character's name as the title and its traits as the subtitle in place of the "New
+// character created!" copy.
+function openCharacterDetailFromTile(card) {
+  const character = currentBoard.characters.find((c) => c.id === card.dataset.id);
+  if (!character) return;
+  showCharacterModal({
+    title: character.name || 'Unnamed',
+    portraitUrl: character.portraitUrl,
+    subtitle: traitLabelsFor(character) || 'No features',
+  });
+}
+
+characterGrid.addEventListener('click', (e) => {
+  const card = e.target.closest('.character-card');
+  if (card) openCharacterDetailFromTile(card);
+});
+
+characterGrid.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const card = e.target.closest('.character-card');
+  if (!card) return;
+  e.preventDefault();
+  openCharacterDetailFromTile(card);
+});
 
 document.getElementById('completeBoardBtn').addEventListener('click', async () => {
   if (!currentBoard) return;
@@ -496,7 +530,12 @@ generateBtn.addEventListener('click', async () => {
     pendingDetectBlob = null;
     pendingFullBlob = null;
     detectedTraitIds = [];
-    showNewCharacterModal(board.characters[board.characters.length - 1]);
+    const newCharacter = board.characters[board.characters.length - 1];
+    showCharacterModal({
+      title: 'New character created!',
+      portraitUrl: newCharacter.portraitUrl,
+      subtitle: newCharacter.name || 'Unnamed',
+    });
   } catch (err) {
     statusEl.textContent = err.message;
     statusEl.className = 'status error';
@@ -507,23 +546,25 @@ generateBtn.addEventListener('click', async () => {
   }
 });
 
-// --- New character modal: shown on successful create, dismissing returns to the board ---
+// --- Character modal: shown on successful create and on tile click. Dismissing lands back
+// on the board detail page (a no-op hash set if already there). ---
 
-function showNewCharacterModal(character) {
-  newCharacterPortrait.src = character.portraitUrl || '';
-  newCharacterPortrait.alt = character.name || '';
-  newCharacterName.textContent = character.name || 'Unnamed';
-  newCharacterModal.classList.remove('hidden');
+function showCharacterModal({ title, portraitUrl, subtitle }) {
+  characterModalTitle.textContent = title;
+  characterModalPortrait.src = portraitUrl || '';
+  characterModalPortrait.alt = title;
+  characterModalSubtitle.textContent = subtitle;
+  characterModal.classList.remove('hidden');
 }
 
-function dismissNewCharacterModal() {
-  newCharacterModal.classList.add('hidden');
+function dismissCharacterModal() {
+  characterModal.classList.add('hidden');
   if (currentBoard) location.hash = `#/board/${currentBoard.id}`;
 }
 
-newCharacterDismissBtn.addEventListener('click', dismissNewCharacterModal);
-newCharacterModal.addEventListener('click', (e) => {
-  if (e.target === newCharacterModal) dismissNewCharacterModal();
+characterModalDismissBtn.addEventListener('click', dismissCharacterModal);
+characterModal.addEventListener('click', (e) => {
+  if (e.target === characterModal) dismissCharacterModal();
 });
 
 function escapeHtml(str) {
