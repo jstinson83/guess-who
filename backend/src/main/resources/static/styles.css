@@ -262,6 +262,18 @@ section.hidden {
   z-index: 1;
 }
 
+.character-grid-empty {
+  display: flex;
+  min-height: 140px;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.character-grid-empty .status {
+  margin: 0;
+}
+
 .switch-disabled {
   opacity: 0.45;
   cursor: not-allowed;
@@ -388,6 +400,10 @@ input[type='file'] {
 #cropContainer img {
   display: block;
   max-width: 100%;
+}
+
+#confirmCropBtn {
+  margin-top: 1.25rem;
 }
 
 .traits {

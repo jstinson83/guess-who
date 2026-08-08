@@ -222,6 +222,7 @@ function traitLabelsFor(character) {
 
 function renderCharacterGrid() {
   const characters = currentBoard.characters;
+  characterGrid.classList.toggle('character-grid-empty', characters.length === 0);
   if (characters.length === 0) {
     characterGrid.innerHTML = '<p class="status">No characters added yet.</p>';
     return;
