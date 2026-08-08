@@ -230,6 +230,20 @@ class BoardBalancerTest {
         assertTrue(suggestions.zipWithNext().all { (a, b) -> a.score.overallScore >= b.score.overallScore })
     }
 
+    // --- exclusivityConflict ---
+
+    @Test
+    fun `exclusivityConflict finds a conflicting pair within a trait set`() {
+        val conflict = BoardBalancer.exclusivityConflict(setOf("glasses", "hair_light", "hair_dark"), TestPool)
+
+        assertEquals(setOf("hair_light", "hair_dark"), setOfNotNull(conflict?.first?.id, conflict?.second?.id))
+    }
+
+    @Test
+    fun `exclusivityConflict returns null for a consistent trait set`() {
+        assertEquals(null, BoardBalancer.exclusivityConflict(setOf("glasses", "hat", "hair_light"), TestPool))
+    }
+
     // --- addCharacter ---
 
     @Test

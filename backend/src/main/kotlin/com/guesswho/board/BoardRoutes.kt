@@ -41,7 +41,13 @@ data class FeatureStatusDto(
 )
 
 @Serializable
-data class FeatureAvailabilityDto(val id: String, val label: String, val available: Boolean, val reason: String?)
+data class FeatureAvailabilityDto(
+    val id: String,
+    val label: String,
+    val available: Boolean,
+    val reason: String?,
+    val exclusiveWith: List<String>,
+)
 
 @Serializable
 data class BoardDetailDto(
@@ -198,6 +204,11 @@ fun Route.boardRoutes(repository: Lazy<BoardRepository>, httpClient: HttpClient,
                     return@post
                 }
 
+                if (name.isBlank()) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Character name is required"))
+                    return@post
+                }
+
                 val traitIds = runCatching { Json.decodeFromString<List<String>>(traitsRaw) }.getOrDefault(emptyList()).toSet()
                 val removeTraitIds = runCatching { Json.decodeFromString<List<String>>(removeTraitsRaw) }.getOrDefault(emptyList()).toSet()
 
@@ -209,6 +220,11 @@ fun Route.boardRoutes(repository: Lazy<BoardRepository>, httpClient: HttpClient,
                                 "${BoardBalancer.MAX_TRAITS_PER_CHARACTER} features (got ${traitIds.size})",
                         ),
                     )
+                    return@post
+                }
+
+                BoardBalancer.exclusivityConflict(traitIds)?.let { (f1, f2) ->
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Can't combine '${f1.label}' and '${f2.label}'"))
                     return@post
                 }
 
@@ -274,7 +290,7 @@ private fun BoardState.toDetailDto() = BoardDetailDto(
         )
     },
     availableFeatures = BoardBalancer.availableFeatures(this).map {
-        FeatureAvailabilityDto(it.feature.id, it.feature.label, it.available, it.reason)
+        FeatureAvailabilityDto(it.feature.id, it.feature.label, it.available, it.reason, it.feature.exclusiveWith.toList())
     },
     minTraitsPerCharacter = BoardBalancer.MIN_TRAITS_PER_CHARACTER,
     maxTraitsPerCharacter = BoardBalancer.MAX_TRAITS_PER_CHARACTER,

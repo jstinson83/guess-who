@@ -131,6 +131,18 @@ object BoardBalancer {
     fun addCharacter(board: BoardState, character: Character): BoardState =
         board.copy(characters = board.characters + character)
 
+    /** First exclusive-pair conflict within a single character's trait set (e.g. long hair
+     * + short hair both selected), or null if the set is internally consistent. Server-side
+     * backstop for the same rule the features UI enforces interactively. */
+    fun exclusivityConflict(traitIds: Set<String>, pool: FeaturePool = DefaultFeaturePool): Pair<FeatureDef, FeatureDef>? {
+        val byId = pool.allFeatures().associateBy { it.id }
+        val features = traitIds.mapNotNull { byId[it] }
+        for ((f1, f2) in features.allPairs()) {
+            if (f2.id in f1.exclusiveWith) return f1 to f2
+        }
+        return null
+    }
+
     private fun statusOf(feature: FeatureDef, board: BoardState): FeatureStatus {
         val yes = board.characters.count { feature.id in it.traits }
         val no = board.characters.size - yes
