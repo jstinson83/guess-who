@@ -38,11 +38,14 @@ class BoardRoutesTest {
 
     private fun portraitStore() = lazy { InMemoryPortraitStore() as com.guesswho.storage.PortraitStore }
 
-    private fun io.ktor.server.application.Application.installBoardRoutes() {
+    private fun io.ktor.server.application.Application.installBoardRoutes(
+        repo: Lazy<BoardRepository> = repository(),
+    ): Lazy<BoardRepository> {
         install(ContentNegotiation) { json() }
         routing {
-            boardRoutes(repository(), HttpClient(CIO) { install(ClientContentNegotiation) { json() } }, portraitStore())
+            boardRoutes(repo, HttpClient(CIO) { install(ClientContentNegotiation) { json() } }, portraitStore())
         }
+        return repo
     }
 
     @Test
@@ -215,7 +218,27 @@ class BoardRoutesTest {
     }
 
     @Test
-    fun `completing a board flips its status`() = testApplication {
+    fun `completing a board flips its status once it has enough characters`() = testApplication {
+        val repo = repository()
+        application { installBoardRoutes(repo) }
+
+        val createResponse = client.post("/api/boards") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"name":"Classroom","targetSize":2}""")
+        }
+        val id = Json.parseToJsonElement(createResponse.bodyAsText()).jsonObject.getValue("id").jsonPrimitive.content
+
+        repo.value.addCharacter(id, "Ada", setOf("glasses", "hat", "facial_hair", "long_hair", "hair_light"), null)
+        repo.value.addCharacter(id, "Bo", setOf("glasses", "hat", "facial_hair", "long_hair", "hair_dark"), null)
+
+        val completeResponse = client.post("/api/boards/$id/complete")
+        assertEquals(HttpStatusCode.OK, completeResponse.status)
+        val completed = Json.parseToJsonElement(completeResponse.bodyAsText()).jsonObject
+        assertEquals("COMPLETE", completed.getValue("status").jsonPrimitive.content)
+    }
+
+    @Test
+    fun `completing a board without enough characters is rejected`() = testApplication {
         application { installBoardRoutes() }
 
         val createResponse = client.post("/api/boards") {
@@ -225,8 +248,7 @@ class BoardRoutesTest {
         val id = Json.parseToJsonElement(createResponse.bodyAsText()).jsonObject.getValue("id").jsonPrimitive.content
 
         val completeResponse = client.post("/api/boards/$id/complete")
-        assertEquals(HttpStatusCode.OK, completeResponse.status)
-        val completed = Json.parseToJsonElement(completeResponse.bodyAsText()).jsonObject
-        assertEquals("COMPLETE", completed.getValue("status").jsonPrimitive.content)
+        assertEquals(HttpStatusCode.BadRequest, completeResponse.status)
+        assertTrue(completeResponse.bodyAsText().contains("needs 20 characters"))
     }
 }

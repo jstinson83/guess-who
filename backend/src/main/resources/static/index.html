@@ -89,17 +89,16 @@
           <div class="spinner"></div>
         </div>
 
-        <label class="field-label" for="personName">Their name</label>
-        <input type="text" id="personName" placeholder="e.g. Jordan" required />
-        <label class="field-hint">Required.</label>
-
         <label class="field-label">Features</label>
         <label class="field-hint">Features already at their target for this board are greyed out.</label>
         <div class="traits" id="traits"></div>
         <div id="traitsCount" class="status"></div>
         <div id="duplicateWarning" class="status warning hidden"></div>
 
-        <button id="generateBtn">Create character</button>
+        <div class="name-and-submit">
+          <input type="text" id="personName" placeholder="Their name" required />
+          <button id="generateBtn">Create character</button>
+        </div>
         <div id="status" class="status"></div>
       </div>
     </section>

@@ -184,9 +184,13 @@ function renderBoardDetail() {
   boardNameEl.textContent = board.name;
   boardMetaEl.textContent = `${board.characters.length}/${board.targetSize} characters · ${board.status === 'COMPLETE' ? 'Complete' : 'In progress'}`;
 
+  const hasEnoughCharacters = board.characters.length >= board.targetSize;
   const completeBtn = document.getElementById('completeBoardBtn');
-  completeBtn.disabled = board.status === 'COMPLETE';
+  completeBtn.disabled = board.status === 'COMPLETE' || !hasEnoughCharacters;
   completeBtn.textContent = board.status === 'COMPLETE' ? 'Board complete' : 'Mark board complete';
+  completeBtn.title = hasEnoughCharacters
+    ? ''
+    : `Add ${board.targetSize - board.characters.length} more character(s) to complete the board`;
 
   fabContainer.classList.toggle('hidden', board.status === 'COMPLETE');
 
@@ -218,6 +222,7 @@ function traitLabelsFor(character) {
 
 function renderCharacterGrid() {
   const characters = currentBoard.characters;
+  characterGrid.classList.toggle('character-grid-empty', characters.length === 0);
   if (characters.length === 0) {
     characterGrid.innerHTML = '<p class="status">No characters added yet.</p>';
     return;
