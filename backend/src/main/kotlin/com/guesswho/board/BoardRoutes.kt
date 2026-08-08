@@ -164,12 +164,22 @@ fun Route.boardRoutes(repository: Lazy<BoardRepository>, httpClient: HttpClient,
             }
 
             post("/complete") {
-                val board = repository.value.completeBoard(call.parameters["id"]!!)
+                val id = call.parameters["id"]!!
+                val board = repository.value.getBoard(id)
                 if (board == null) {
                     call.respond(HttpStatusCode.NotFound, mapOf("error" to "Board not found"))
                     return@post
                 }
-                call.respond(board.toDetailDto())
+                if (board.characters.size < board.targetSize) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf("error" to "Board needs ${board.targetSize} characters before it can be completed (has ${board.characters.size})"),
+                    )
+                    return@post
+                }
+
+                val completed = repository.value.completeBoard(id)
+                call.respond(completed!!.toDetailDto())
             }
 
             post("/characters") {

@@ -34,7 +34,7 @@ main {
 
 h1 {
   font-family: 'Sniglet', sans-serif;
-  font-weight: 800;
+  font-weight: 400;
   font-size: 2rem;
   color: var(--navy);
   margin: 0 0 0.35rem;
@@ -353,15 +353,24 @@ label.field-hint {
   margin: -0.5rem 0 0.75rem;
 }
 
+.name-and-submit {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+}
+
 #personName {
-  display: block;
   font: inherit;
-  width: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
   padding: 0.6rem 0.8rem;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--bg);
-  margin-bottom: 0.75rem;
+}
+
+.name-and-submit button {
+  flex: 0 0 auto;
 }
 
 input[type='file'] {
