@@ -81,19 +81,30 @@ suspend fun generatePortrait(
             "none of their facial features, face shape, proportions, skin tone, or identity may be used. " +
             "Every identity detail must come exclusively from the first photo."
     } else ""
-    val prompt = "TOP PRIORITY, more important than the art style: the output must be immediately " +
-        "recognizable as the exact same individual in the first photo — someone who knows them in real " +
-        "life should identify them at a glance. Preserve their precise face shape, jawline, eye shape, " +
-        "eye spacing and color, eyebrow shape, nose shape, mouth and lip shape, ears, skin tone, and hair " +
-        "color and texture exactly as shown in the first photo. Do not average, idealize, beautify, " +
-        "slim, or generify their features — small asymmetries and distinguishing traits are what make " +
-        "the likeness work and must be kept.\n\n" +
-        "With that constraint, redraw this photo of a person as a bold, flat-color cartoon illustration " +
-        "— a stylized cartoon portrait, not a photorealistic edit. Crop and reframe to a head-and-shoulders " +
-        "portrait centered on the face, and replace the background with a plain solid color so the person " +
-        "is the only subject in frame.$traitsClause$removeClause$styleClause\n\n" +
-        "Reminder: likeness to the first photo takes priority over stylization — if in doubt, keep the " +
-        "person's real features rather than smoothing them toward a generic cartoon face."
+    val prompt = "ABSOLUTE TOP PRIORITY, overriding every other instruction including the art style: this is " +
+        "a likeness portrait of one specific, real individual, not a generic cartoon character who merely " +
+        "shares their traits. The first attached photo is ground truth — treat it the way a portrait artist " +
+        "treats a sitting, not as loose inspiration. Someone who knows this person in real life must be able " +
+        "to identify them instantly from the result, with no hesitation. If that would not happen, the " +
+        "output has failed the task, no matter how good the cartoon style looks.\n\n" +
+        "Copy, do not reinterpret, this person's exact: face shape and proportions, jawline, cheekbones, " +
+        "eye shape, eye spacing, eye color, eyebrow shape and thickness, nose shape and width, mouth and " +
+        "lip shape, chin shape, ears, skin tone, and hair color, texture, and hairline exactly as shown in " +
+        "the first photo. Preserve real facial geometry and spacing between features precisely — do not " +
+        "resize, re-center, or rebalance them toward a symmetric or idealized layout. Never average, " +
+        "idealize, beautify, slim, de-age, or generify their features toward a default or template face. " +
+        "The specific asymmetries, proportions, and small distinguishing details visible in the photo are " +
+        "exactly what must survive into the cartoon — they are not flaws to smooth away.\n\n" +
+        "With that non-negotiable constraint, redraw this photo of a person as a bold, flat-color cartoon " +
+        "illustration — a stylized cartoon portrait, not a photorealistic edit. Apply only the linework, " +
+        "shading, and color-flattening of the cartoon style; do not let the style reshape the underlying " +
+        "face. Crop and reframe to a head-and-shoulders portrait centered on the face, and replace the " +
+        "background with a plain solid color so the person is the only subject in " +
+        "frame.$traitsClause$removeClause$styleClause\n\n" +
+        "FINAL REMINDER, most important instruction in this entire prompt: likeness and recognizability of " +
+        "the exact person in the first photo always wins over stylization. When cartoon style and faithful " +
+        "likeness pull in different directions, keep the person's real, specific features and bend the " +
+        "style to accommodate them — never the other way around."
 
     val parts = buildList {
         add(GeminiPart(text = prompt))
