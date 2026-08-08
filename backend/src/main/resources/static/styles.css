@@ -180,8 +180,30 @@ section.hidden {
   margin-bottom: 1.25rem;
 }
 
-.board-complete-actions #completeBoardBtn {
+.board-complete-actions #completeBoardBtn,
+.board-complete-actions #playBoardBtn {
   padding: 0.9rem 2.5rem;
+}
+
+/* #playBoardBtn is an <a>, not a <button> — match button chrome by hand. */
+.board-complete-actions #playBoardBtn {
+  display: inline-block;
+  font-weight: 600;
+  border-radius: 999px;
+  background: var(--accent-2);
+  color: #4a3b00;
+  text-decoration: none;
+  box-shadow: 0 4px 0 var(--accent-2-hover);
+  transition: transform 0.08s ease, box-shadow 0.08s ease, background 0.15s ease;
+}
+
+.board-complete-actions #playBoardBtn:hover {
+  background: var(--accent-2-hover);
+}
+
+.board-complete-actions #playBoardBtn:active {
+  transform: translateY(4px);
+  box-shadow: 0 0 0 var(--accent-2-hover);
 }
 
 .character-grid {
@@ -878,6 +900,140 @@ button:disabled {
   opacity: 0.5;
   font-size: 1.2rem;
   line-height: 1;
+}
+
+/* --- Pass-and-play game view (#gameView / #gameContent) --- */
+
+#gameContent > * + * {
+  margin-top: 1.25rem;
+}
+
+.guess-picker-modal {
+  max-width: 600px;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.guess-picker-modal .board-complete-actions {
+  margin-top: 1rem;
+  margin-bottom: 0;
+}
+
+.guess-picker-modal #cancelGuessBtn {
+  display: block;
+  margin: 0.75rem auto 0;
+}
+
+.game-card-pickable {
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.08s ease;
+}
+
+.game-card-pickable:hover {
+  border-color: var(--accent);
+}
+
+.game-card-selected {
+  border-color: var(--accent);
+  box-shadow: 0 3px 0 var(--accent-hover);
+}
+
+.game-card-name {
+  font-weight: 600;
+  font-size: 0.82rem;
+  text-align: center;
+  padding: 0.35rem 0.2rem 0.1rem;
+  color: var(--navy);
+}
+
+.pass-screen {
+  text-align: center;
+  padding: 2.5rem 1rem;
+}
+
+.pass-screen h1 {
+  margin-bottom: 0.75rem;
+}
+
+.pass-screen p {
+  color: var(--muted);
+  margin-bottom: 2rem;
+}
+
+.game-turn-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+}
+
+.trait-ask-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.6rem;
+}
+
+.trait-ask-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  box-shadow: none;
+  padding: 0.6rem 0.9rem;
+  font-size: 0.9rem;
+}
+
+.trait-ask-btn:hover:not(:disabled) {
+  background: var(--bg);
+  border-color: var(--accent);
+}
+
+.trait-ask-btn:disabled {
+  opacity: 1;
+}
+
+.trait-ask-answer {
+  font-weight: 800;
+  font-size: 0.8rem;
+}
+
+.trait-ask-answer-yes {
+  color: var(--good);
+}
+
+.trait-ask-answer-no {
+  color: var(--accent);
+}
+
+.game-over-content {
+  text-align: center;
+  padding: 1rem;
+}
+
+.game-over-content h1 {
+  margin-bottom: 0.5rem;
+}
+
+.game-over-reveal {
+  display: flex;
+  justify-content: center;
+  gap: 1.5rem;
+  margin: 1.5rem 0;
+  flex-wrap: wrap;
+}
+
+.game-over-reveal-card {
+  width: 140px;
+}
+
+.game-over-reveal-card .game-card img {
+  border-radius: calc(var(--game-card-radius) - 6px);
 }
 
 @media (max-width: 480px) {

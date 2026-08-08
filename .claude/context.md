@@ -166,7 +166,30 @@ precisely, and what bit us before."
   for quick manual testing; the frontend no longer calls it (board
   add-character goes through `/api/boards/{id}/characters` instead, which
   calls the same shared `generatePortrait()` helper).
-- No board-quality analysis, no game generation yet — see `current.md`.
+- **Pass-and-play game screen** (`#/board/<id>/play`, entirely in
+  `static/app.js` — no new backend route): playable once a board is
+  `COMPLETE` (board detail swaps the disabled "Mark board complete" button
+  for an enabled "Play" link at that point). Setup has each player
+  privately pick a secret character (the other player must guess it), with
+  a pass-device interstitial between picks; play is strict alternating
+  turns where each turn is exactly one action (ask a trait question, or
+  make a final guess) then pass. Key design point: each player's turn only
+  ever shows *their own* board (all characters, their own
+  previously-eliminated candidates greyed out) — the two players' candidate
+  sets are independent, since they're each narrowing down a different
+  secret. Trait-question answers are looked up automatically from the
+  opponent's already-stored `traits` (`CharacterDto.traits`, already
+  present in the existing `GET /api/boards/{id}` response) rather than a
+  player manually judging/typing an answer, which is what makes the
+  no-secrecy-during-play property possible — the app is an honest referee,
+  so there's nothing left to hide except the two initial picks. A wrong
+  final guess is an immediate loss (classic rule, no take-backs). Session
+  state is client-only (a `gameState` object in `app.js`); a page refresh
+  mid-game loses progress, accepted for a same-room, same-sitting MVP —
+  deliberately not the same problem as the parked "async two-device play"
+  idea in `current.md`, which is about reconnecting across devices/time.
+- No board-quality analysis yet; game generation so far is pass-and-play
+  only (saving/editing generated games not started) — see `current.md`.
 
 ## Decisions / things already considered
 

@@ -2,6 +2,9 @@ const boardListView = document.getElementById('boardListView');
 const boardDetailView = document.getElementById('boardDetailView');
 const cropView = document.getElementById('cropView');
 const featuresView = document.getElementById('featuresView');
+const gameView = document.getElementById('gameView');
+const gameContent = document.getElementById('gameContent');
+const playBoardBtn = document.getElementById('playBoardBtn');
 const boardList = document.getElementById('boardList');
 const createBoardStatus = document.getElementById('createBoardStatus');
 
@@ -41,6 +44,9 @@ const characterModalDismissBtn = document.getElementById('characterModalDismissB
 let cropper = null;
 let currentBoard = null;
 let detectedTraitIds = [];
+// Pass-and-play session state — entirely client-side, keyed to the board it was started for
+// (see `startNewGame`/`showGameView`). Lost on refresh; that's fine for a same-room MVP.
+let gameState = null;
 
 // Photo picked from the FAB, waiting to be cropped.
 let pendingPhotoFile = null;
@@ -54,7 +60,7 @@ let pendingFullBlob = null;
 // add-a-character wizard steps, anything else shows the board list. ---
 
 function showOnly(view) {
-  for (const v of [boardListView, boardDetailView, cropView, featuresView]) {
+  for (const v of [boardListView, boardDetailView, cropView, featuresView, gameView]) {
     v.classList.toggle('hidden', v !== view);
   }
 }
@@ -64,12 +70,15 @@ async function route() {
 
   const cropMatch = location.hash.match(/^#\/board\/([^/]+)\/crop$/);
   const featuresMatch = location.hash.match(/^#\/board\/([^/]+)\/features$/);
+  const playMatch = location.hash.match(/^#\/board\/([^/]+)\/play$/);
   const detailMatch = location.hash.match(/^#\/board\/([^/]+)$/);
 
   if (cropMatch) {
     await showCropView(cropMatch[1]);
   } else if (featuresMatch) {
     await showFeaturesView(featuresMatch[1]);
+  } else if (playMatch) {
+    await showGameView(playMatch[1]);
   } else if (detailMatch) {
     await showBoardDetail(detailMatch[1]);
   } else {
@@ -185,14 +194,18 @@ function renderBoardDetail() {
   boardMetaEl.textContent = `${board.characters.length}/${board.targetSize} characters · ${board.status === 'COMPLETE' ? 'Complete' : 'In progress'}`;
 
   const hasEnoughCharacters = board.characters.length >= board.targetSize;
+  const isComplete = board.status === 'COMPLETE';
   const completeBtn = document.getElementById('completeBoardBtn');
-  completeBtn.disabled = board.status === 'COMPLETE' || !hasEnoughCharacters;
-  completeBtn.textContent = board.status === 'COMPLETE' ? 'Board complete' : 'Mark board complete';
+  completeBtn.classList.toggle('hidden', isComplete);
+  completeBtn.disabled = !hasEnoughCharacters;
   completeBtn.title = hasEnoughCharacters
     ? ''
     : `Add ${board.targetSize - board.characters.length} more character(s) to complete the board`;
 
-  fabContainer.classList.toggle('hidden', board.status === 'COMPLETE');
+  playBoardBtn.classList.toggle('hidden', !isComplete);
+  playBoardBtn.href = `#/board/${board.id}/play`;
+
+  fabContainer.classList.toggle('hidden', isComplete);
 
   renderCharacterGrid();
   renderFeatureBalance();
@@ -279,6 +292,312 @@ document.getElementById('completeBoardBtn').addEventListener('click', async () =
   currentBoard = board;
   renderBoardDetail();
 });
+
+// --- Pass-and-play game ---
+//
+// Two secrets (one per player) and two independent candidate tracks: each player's turn
+// narrows down *the opponent's* secret, based only on that player's own past answers, so
+// player 1's board and player 2's board are never the same set of eliminated characters.
+// Trait answers are looked up from the opponent's already-known `traits` (no manual honesty
+// needed) and the "who could it be" grid is just the full character list filtered by every
+// answer given so far — no separate elimination list to keep in sync.
+//
+// Turn structure is strict: each turn is exactly one action (ask a trait, or make a final
+// guess) then pass. A wrong final guess is an immediate loss, matching the physical game.
+
+function startNewGame() {
+  gameState = {
+    boardId: currentBoard.id,
+    phase: 'PICK1', // PICK1 -> PASS_TO_2 -> PICK2 -> PASS_TO_1 -> PLAYING -> GAME_OVER
+    secrets: {}, // { 1: characterId, 2: characterId }
+    answers: { 1: {}, 2: {} }, // per player: { traitId: boolean }, accumulated as they ask
+    turn: 1,
+    turnActionTaken: false,
+    winner: null,
+    correctGuess: null,
+    guesser: null,
+  };
+}
+
+async function showGameView(id) {
+  const ok = await ensureBoardLoaded(id);
+  if (!ok || currentBoard.status !== 'COMPLETE') {
+    location.hash = `#/board/${id}`;
+    return;
+  }
+  showOnly(gameView);
+  if (!gameState || gameState.boardId !== currentBoard.id) {
+    startNewGame();
+  }
+  renderGame();
+}
+
+document.getElementById('gameBackBtn').addEventListener('click', () => {
+  if (currentBoard) location.hash = `#/board/${currentBoard.id}`;
+});
+
+function renderGame() {
+  switch (gameState.phase) {
+    case 'PICK1':
+      renderPickScreen(1);
+      break;
+    case 'PICK2':
+      renderPickScreen(2);
+      break;
+    case 'PASS_TO_2':
+    case 'PASS_TO_1':
+      renderPassScreen();
+      break;
+    case 'PLAYING':
+      renderPlayScreen();
+      break;
+    case 'GAME_OVER':
+      renderGameOverScreen();
+      break;
+  }
+}
+
+function gameCardHtml(character) {
+  return `
+    <img src="${character.portraitUrl || ''}" alt="${escapeHtml(character.name)}" />
+    <div class="game-card-name">${escapeHtml(character.name || 'Unnamed')}</div>
+  `;
+}
+
+// Setup phase: each player privately picks the character the *other* player will have to
+// guess. The pass-device interstitial (see renderPassScreen) is what keeps it private.
+function renderPickScreen(player) {
+  const otherPlayer = player === 1 ? 2 : 1;
+  gameContent.innerHTML = `
+    <h1>Player ${player}: pick your character</h1>
+    <p class="subtitle">Don't let Player ${otherPlayer} see — this is who they'll have to guess.</p>
+    <div class="game-card-grid" id="pickGrid"></div>
+    <div class="board-complete-actions">
+      <button id="confirmPickBtn" disabled>Confirm pick</button>
+    </div>
+  `;
+
+  const pickGrid = document.getElementById('pickGrid');
+  let selectedId = null;
+  for (const character of currentBoard.characters) {
+    const card = document.createElement('div');
+    card.className = 'game-card game-card-pickable';
+    card.dataset.id = character.id;
+    card.innerHTML = gameCardHtml(character);
+    pickGrid.appendChild(card);
+  }
+
+  const confirmBtn = document.getElementById('confirmPickBtn');
+  pickGrid.addEventListener('click', (e) => {
+    const card = e.target.closest('.game-card');
+    if (!card) return;
+    pickGrid.querySelectorAll('.game-card-selected').forEach((el) => el.classList.remove('game-card-selected'));
+    card.classList.add('game-card-selected');
+    selectedId = card.dataset.id;
+    confirmBtn.disabled = false;
+  });
+
+  confirmBtn.addEventListener('click', () => {
+    if (!selectedId) return;
+    gameState.secrets[player] = selectedId;
+    gameState.phase = player === 1 ? 'PASS_TO_2' : 'PASS_TO_1';
+    renderGame();
+  });
+}
+
+function renderPassScreen() {
+  const toPlayer = gameState.phase === 'PASS_TO_2' ? 2 : 1;
+  const subtitle = gameState.phase === 'PASS_TO_1'
+    ? 'Both characters are picked — ready to play.'
+    : `Player ${toPlayer}, get ready to pick your character next.`;
+  gameContent.innerHTML = `
+    <div class="pass-screen">
+      <h1>Pass the device to Player ${toPlayer}</h1>
+      <p>${escapeHtml(subtitle)}</p>
+      <button id="passContinueBtn">I'm Player ${toPlayer}, continue</button>
+    </div>
+  `;
+  document.getElementById('passContinueBtn').addEventListener('click', () => {
+    gameState.phase = gameState.phase === 'PASS_TO_2' ? 'PICK2' : 'PLAYING';
+    renderGame();
+  });
+}
+
+// A player's own candidate board: every character consistent with every answer *that player*
+// has received so far. Independent of the opponent's board, since the two players' answers
+// come from asking about different secrets.
+function remainingCandidates(player) {
+  const answers = gameState.answers[player];
+  return currentBoard.characters.filter((character) =>
+    Object.entries(answers).every(([traitId, answer]) => character.traits.includes(traitId) === answer)
+  );
+}
+
+function renderPlayScreen() {
+  const player = gameState.turn;
+  const opponent = player === 1 ? 2 : 1;
+  const candidateIds = new Set(remainingCandidates(player).map((c) => c.id));
+  const myAnswers = gameState.answers[player];
+
+  gameContent.innerHTML = `
+    <div class="game-turn-header">
+      <h1>Player ${player}'s turn</h1>
+      <div class="counter">
+        <div class="counter-label">Remaining</div>
+        <div class="counter-value">${candidateIds.size}</div>
+      </div>
+    </div>
+    <div class="game-card-grid" id="playGrid"></div>
+    <div class="question-panel">
+      <h2 class="question-panel-title">${gameState.turnActionTaken ? 'Question asked' : 'Ask a question'}</h2>
+      <div class="trait-ask-grid" id="traitAskGrid"></div>
+    </div>
+    <div class="board-complete-actions">
+      ${gameState.turnActionTaken
+        ? `<button id="endTurnBtn">Pass to Player ${opponent}</button>`
+        : `<button id="finalGuessBtn">Make final guess</button>`}
+    </div>
+  `;
+
+  const playGrid = document.getElementById('playGrid');
+  for (const character of currentBoard.characters) {
+    const card = document.createElement('div');
+    card.className = 'game-card' + (candidateIds.has(character.id) ? '' : ' game-card-facedown');
+    card.innerHTML = gameCardHtml(character);
+    playGrid.appendChild(card);
+  }
+
+  const traitAskGrid = document.getElementById('traitAskGrid');
+  for (const feature of currentBoard.featureStatuses) {
+    const asked = Object.prototype.hasOwnProperty.call(myAnswers, feature.id);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'trait-ask-btn';
+    btn.dataset.id = feature.id;
+    btn.disabled = asked || gameState.turnActionTaken;
+    btn.innerHTML = asked
+      ? `<span>${escapeHtml(feature.label)}</span><span class="trait-ask-answer trait-ask-answer-${myAnswers[feature.id] ? 'yes' : 'no'}">${myAnswers[feature.id] ? 'Yes' : 'No'}</span>`
+      : `<span>${escapeHtml(feature.label)}</span>`;
+    traitAskGrid.appendChild(btn);
+  }
+  traitAskGrid.addEventListener('click', (e) => {
+    const btn = e.target.closest('.trait-ask-btn');
+    if (!btn || btn.disabled) return;
+    askTrait(btn.dataset.id);
+  });
+
+  if (gameState.turnActionTaken) {
+    document.getElementById('endTurnBtn').addEventListener('click', endTurn);
+  } else {
+    document.getElementById('finalGuessBtn').addEventListener('click', () => showGuessPicker(player, opponent));
+  }
+}
+
+// The answer comes from the opponent's own stored traits — the app is the honest referee,
+// so nobody has to hand over the device or manually judge a question mid-turn.
+function askTrait(traitId) {
+  const player = gameState.turn;
+  const opponent = player === 1 ? 2 : 1;
+  const opponentSecret = currentBoard.characters.find((c) => c.id === gameState.secrets[opponent]);
+  gameState.answers[player][traitId] = opponentSecret.traits.includes(traitId);
+  gameState.turnActionTaken = true;
+  renderGame();
+}
+
+function endTurn() {
+  gameState.turn = gameState.turn === 1 ? 2 : 1;
+  gameState.turnActionTaken = false;
+  renderGame();
+}
+
+// Guessing is a modal overlay on top of the play screen rather than making the main grid
+// itself clickable, so browsing the board while deciding what to ask can't be mistaken for
+// a final guess.
+function showGuessPicker(player, opponent) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal guess-picker-modal">
+      <h2>Who do you think it is?</h2>
+      <div class="game-card-grid" id="guessGrid"></div>
+      <div class="board-complete-actions">
+        <button id="confirmGuessBtn" disabled>Confirm guess</button>
+      </div>
+      <button class="link-btn" id="cancelGuessBtn">Cancel</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  const guessGrid = document.getElementById('guessGrid');
+  let selectedId = null;
+  for (const character of currentBoard.characters) {
+    const card = document.createElement('div');
+    card.className = 'game-card game-card-pickable';
+    card.dataset.id = character.id;
+    card.innerHTML = gameCardHtml(character);
+    guessGrid.appendChild(card);
+  }
+
+  const confirmBtn = document.getElementById('confirmGuessBtn');
+  guessGrid.addEventListener('click', (e) => {
+    const card = e.target.closest('.game-card');
+    if (!card) return;
+    guessGrid.querySelectorAll('.game-card-selected').forEach((el) => el.classList.remove('game-card-selected'));
+    card.classList.add('game-card-selected');
+    selectedId = card.dataset.id;
+    confirmBtn.disabled = false;
+  });
+
+  confirmBtn.addEventListener('click', () => {
+    if (!selectedId) return;
+    overlay.remove();
+    resolveGuess(player, opponent, selectedId);
+  });
+  document.getElementById('cancelGuessBtn').addEventListener('click', () => overlay.remove());
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) overlay.remove();
+  });
+}
+
+// Classic rule, no take-backs: a wrong final guess loses immediately, it doesn't just cost
+// the turn.
+function resolveGuess(player, opponent, guessedCharacterId) {
+  const correct = guessedCharacterId === gameState.secrets[opponent];
+  gameState.phase = 'GAME_OVER';
+  gameState.winner = correct ? player : opponent;
+  gameState.correctGuess = correct;
+  gameState.guesser = player;
+  renderGame();
+}
+
+function renderGameOverScreen() {
+  const loser = gameState.winner === 1 ? 2 : 1;
+  const winnerSecret = currentBoard.characters.find((c) => c.id === gameState.secrets[gameState.winner]);
+  const loserSecret = currentBoard.characters.find((c) => c.id === gameState.secrets[loser]);
+  const message = gameState.correctGuess
+    ? `Player ${gameState.guesser} guessed correctly!`
+    : `Player ${gameState.guesser} guessed wrong — Player ${gameState.winner} wins by default.`;
+
+  gameContent.innerHTML = `
+    <div class="game-over-content">
+      <h1>Player ${gameState.winner} wins!</h1>
+      <p class="subtitle">${escapeHtml(message)}</p>
+      <div class="game-over-reveal">
+        <div class="game-over-reveal-card">
+          <div class="game-card">${gameCardHtml(winnerSecret)}</div>
+        </div>
+        <div class="game-over-reveal-card">
+          <div class="game-card">${gameCardHtml(loserSecret)}</div>
+        </div>
+      </div>
+      <button id="playAgainBtn">Play again</button>
+    </div>
+  `;
+  document.getElementById('playAgainBtn').addEventListener('click', () => {
+    startNewGame();
+    renderGame();
+  });
+}
 
 // --- FAB: pick a photo (camera or upload), then bounce to the crop step ---
 
