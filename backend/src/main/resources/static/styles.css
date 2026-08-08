@@ -7,8 +7,8 @@
   --accent: #e0342c;
   --accent-hover: #c22a21;
   --accent-2: #ffc93c;
+  --accent-2-hover: #f2b81f;
   --navy: #1f3f6e;
-  --navy-light: #62799a;
   --navy-soft: rgba(31, 63, 110, 0.12);
   --border: #ecdfc0;
   --good: #3a8f47;
@@ -448,11 +448,11 @@ button {
   font-weight: 600;
   padding: 0.75rem 1.5rem;
   border-radius: 999px;
-  border: 3px solid var(--navy);
+  border: none;
   background: var(--accent);
   color: #fff;
   cursor: pointer;
-  box-shadow: 0 4px 0 var(--navy-light);
+  box-shadow: 0 4px 0 var(--accent-hover);
   transform: translateY(0);
   transition: transform 0.08s ease, box-shadow 0.08s ease, background 0.15s ease;
 }
@@ -462,10 +462,10 @@ button:hover:not(:disabled) {
 }
 
 /* Chunky "pop" press: excludes the small circular/icon buttons and the plain text
-   link-btn, which reset border/box-shadow to none below and shouldn't animate. */
+   link-btn, which reset box-shadow to none below and shouldn't animate. */
 button:active:not(:disabled):not(.fab-main):not(.fab-option):not(.counter-btn):not(.link-btn) {
   transform: translateY(4px);
-  box-shadow: 0 0 0 var(--navy-light);
+  box-shadow: 0 0 0 var(--accent-hover);
 }
 
 button:disabled {
@@ -537,7 +537,6 @@ button:disabled {
   width: 60px;
   height: 60px;
   border-radius: 50%;
-  border: none;
   font-size: 1.8rem;
   line-height: 1;
   padding: 0;
@@ -556,7 +555,6 @@ button:disabled {
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  border: none;
   padding: 0;
   display: flex;
   align-items: center;
@@ -710,10 +708,15 @@ button:disabled {
 .btn-answer {
   background: var(--accent-2);
   color: #4a3b00;
+  box-shadow: 0 4px 0 var(--accent-2-hover);
 }
 
 .btn-answer:hover:not(:disabled) {
-  background: #f2b81f;
+  background: var(--accent-2-hover);
+}
+
+.btn-answer:active:not(:disabled) {
+  box-shadow: 0 0 0 var(--accent-2-hover);
 }
 
 /* --- Guess counter --- */
@@ -773,7 +776,7 @@ button:disabled {
 }
 
 .counter-btn-increment:hover {
-  background: #f2b81f;
+  background: var(--accent-2-hover);
 }
 
 .counter-value {
