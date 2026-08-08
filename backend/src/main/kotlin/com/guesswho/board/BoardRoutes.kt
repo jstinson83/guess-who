@@ -4,7 +4,7 @@ import com.guesswho.PortraitResult
 import com.guesswho.STYLE_TEMPLATE_OBJECT_NAME
 import com.guesswho.generatePortrait
 import com.guesswho.storage.PortraitStore
-import com.guesswho.storage.StoredPortrait
+import com.guesswho.storage.optimizePortrait
 import io.ktor.client.HttpClient
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
@@ -251,7 +251,7 @@ fun Route.boardRoutes(repository: Lazy<BoardRepository>, httpClient: HttpClient,
                         return@post
                     }
                     is PortraitResult.Success -> {
-                        val portrait = StoredPortrait(result.imageBytes, result.mimeType)
+                        val portrait = optimizePortrait(result.imageBytes, result.mimeType)
                         val board = repository.value.addCharacter(boardId, name, traitIds, portrait)
                         if (board == null) {
                             call.respond(HttpStatusCode.NotFound, mapOf("error" to "Board not found"))
