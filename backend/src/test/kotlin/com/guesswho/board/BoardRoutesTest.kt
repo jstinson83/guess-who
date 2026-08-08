@@ -129,12 +129,63 @@ class BoardRoutesTest {
                     append(HttpHeaders.ContentType, "image/png")
                     append(HttpHeaders.ContentDisposition, "filename=photo.png")
                 })
+                append("name", "Jordan")
                 append("traits", """["glasses","hat"]""")
             }))
         }
 
         assertEquals(HttpStatusCode.BadRequest, response.status)
         assertTrue(response.bodyAsText().contains("between 5 and 8"))
+    }
+
+    @Test
+    fun `creating a character with a blank name is rejected before calling Gemini`() = testApplication {
+        application { installBoardRoutes() }
+
+        val createResponse = client.post("/api/boards") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"name":"The Smiths","targetSize":12}""")
+        }
+        val id = Json.parseToJsonElement(createResponse.bodyAsText()).jsonObject.getValue("id").jsonPrimitive.content
+
+        val response = client.post("/api/boards/$id/characters") {
+            setBody(MultiPartFormDataContent(formData {
+                append("image", byteArrayOf(1, 2, 3), Headers.build {
+                    append(HttpHeaders.ContentType, "image/png")
+                    append(HttpHeaders.ContentDisposition, "filename=photo.png")
+                })
+                append("traits", """["glasses","hat","facial_hair","long_hair","hair_light"]""")
+            }))
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        assertTrue(response.bodyAsText().contains("name"))
+    }
+
+    @Test
+    fun `creating a character with mutually exclusive features is rejected`() = testApplication {
+        application { installBoardRoutes() }
+
+        val createResponse = client.post("/api/boards") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"name":"The Smiths","targetSize":12}""")
+        }
+        val id = Json.parseToJsonElement(createResponse.bodyAsText()).jsonObject.getValue("id").jsonPrimitive.content
+
+        val response = client.post("/api/boards/$id/characters") {
+            setBody(MultiPartFormDataContent(formData {
+                append("image", byteArrayOf(1, 2, 3), Headers.build {
+                    append(HttpHeaders.ContentType, "image/png")
+                    append(HttpHeaders.ContentDisposition, "filename=photo.png")
+                })
+                append("name", "Jordan")
+                append("traits", """["glasses","hat","facial_hair","hair_light","hair_dark"]""")
+            }))
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        assertTrue(response.bodyAsText().contains("Light hair"))
+        assertTrue(response.bodyAsText().contains("Dark hair"))
     }
 
     @Test
@@ -154,6 +205,7 @@ class BoardRoutesTest {
                     append(HttpHeaders.ContentType, "image/png")
                     append(HttpHeaders.ContentDisposition, "filename=photo.png")
                 })
+                append("name", "Jordan")
                 append("traits", nineTraits)
             }))
         }

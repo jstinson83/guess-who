@@ -380,8 +380,15 @@ async function autoDetectTraits(blob) {
 
 function renderTraits() {
   traitsEl.innerHTML = '';
+  // Detection can flag both halves of an exclusive pair (e.g. long/short hair) at once;
+  // only auto-check the first one seen so the pair never starts out in a conflicting state.
+  const autoChecked = new Set();
   for (const feature of currentBoard.availableFeatures) {
     const detected = detectedTraitIds.includes(feature.id);
+    const conflictsWithAutoChecked = feature.exclusiveWith.some((id) => autoChecked.has(id));
+    const shouldCheck = feature.available && detected && !conflictsWithAutoChecked;
+    if (shouldCheck) autoChecked.add(feature.id);
+
     let reason = feature.reason || '';
     if (!feature.available && detected) {
       reason = reason ? `${reason} — detected in photo, will be left out` : 'Detected in photo, will be left out';
@@ -392,7 +399,7 @@ function renderTraits() {
     label.className = 'switch' + (feature.available ? '' : ' switch-disabled');
     label.title = reason;
     label.innerHTML = `
-      <input type="checkbox" value="${feature.id}" ${feature.available ? '' : 'disabled'} ${feature.available && detected ? 'checked' : ''} />
+      <input type="checkbox" value="${feature.id}" data-exclusive-with="${feature.exclusiveWith.join(',')}" ${feature.available ? '' : 'disabled'} ${shouldCheck ? 'checked' : ''} />
       <span class="switch-track"></span>${escapeHtml(feature.label)}
       ${status ? `<span class="switch-count switch-count-${stateClass}">${status.currentYes}/${status.targetYesMin}–${status.targetYesMax}</span>` : ''}
       ${reason ? `<span class="switch-reason">${escapeHtml(reason)}</span>` : ''}
@@ -402,7 +409,20 @@ function renderTraits() {
   updateTraitsSummary();
 }
 
-traitsEl.addEventListener('change', updateTraitsSummary);
+// Enforces mutually-exclusive traits (e.g. long hair / short hair) at selection time rather
+// than rejecting the combination after the fact: checking one half of a pair immediately
+// unchecks its partner, so the two can never both be selected at once.
+traitsEl.addEventListener('change', (e) => {
+  const checkbox = e.target;
+  if (checkbox.matches('input[type="checkbox"]') && checkbox.checked) {
+    const exclusiveIds = (checkbox.dataset.exclusiveWith || '').split(',').filter(Boolean);
+    for (const id of exclusiveIds) {
+      const partner = traitsEl.querySelector(`input[value="${id}"]`);
+      if (partner) partner.checked = false;
+    }
+  }
+  updateTraitsSummary();
+});
 
 function selectedTraitIds() {
   return Array.from(document.querySelectorAll('#traits input:checked:not(:disabled)')).map((el) => el.value);
@@ -422,6 +442,7 @@ function updateTraitsSummary() {
   const selected = selectedTraitIds();
   const { minTraitsPerCharacter: min, maxTraitsPerCharacter: max } = currentBoard;
   const inRange = selected.length >= min && selected.length <= max;
+  const hasName = personNameInput.value.trim().length > 0;
 
   traitsCountEl.textContent = `${selected.length} feature${selected.length === 1 ? '' : 's'} selected (need ${min}–${max})`;
   traitsCountEl.className = 'status' + (inRange ? '' : ' error');
@@ -435,8 +456,10 @@ function updateTraitsSummary() {
     duplicateWarningEl.classList.add('hidden');
   }
 
-  generateBtn.disabled = !inRange;
+  generateBtn.disabled = !inRange || !hasName;
 }
+
+personNameInput.addEventListener('input', updateTraitsSummary);
 
 generateBtn.addEventListener('click', async () => {
   if (!pendingFullBlob || !currentBoard) return;
