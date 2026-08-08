@@ -69,12 +69,17 @@ precisely, and what bit us before."
   gotchas (`ApiFuture` vs. Guava's `ListenableFuture`, the bucket/IAM setup
   and object-naming scheme for portraits).
 - **Frontend**: one static HTML page (`backend/src/main/resources/static/index.html`)
-  plus `app.js` (view logic) and vendored `Cropper.js` for the crop UI,
-  served directly by Ktor's `staticResources` — no framework, no build
-  step, no CDN dependency. Two views toggled by a `#/board/<id>` hash
-  route: a board list/create view, and a board detail view (character
-  grid + add-a-character flow). This replaced the old single-page
-  freeform-trait upload UI described in "Decisions" below.
+  plus `app.js` (view logic), `templates.js` (markup-building functions —
+  see `CLAUDE.md`), and vendored `Cropper.js` for the crop UI, served
+  directly by Ktor's `staticResources` — no framework, no build step, no
+  CDN dependency. Views toggle by hash route: board list/create,
+  `#/board/<id>` detail (character grid + add-a-character flow), and
+  `#/board/<id>/play` (pass-and-play game). This replaced the old
+  single-page freeform-trait upload UI described in "Decisions" below.
+- **Frontend tests**: Playwright, `tests/` at the repo root (`npm test`;
+  see `README.md`/`CLAUDE.md`). Runs against the static files directly, no
+  Kotlin backend — `page.route()` intercepts every backend call with
+  fixture data.
 - **Deploy**: Cloud Build (`cloudbuild.yaml`) → Artifact Registry → Cloud
   Run, triggered on push to `main`. Full one-time setup steps are in
   `README.md`, not duplicated here.

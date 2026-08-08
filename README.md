@@ -44,13 +44,36 @@ the app starts fine without it.
   `FirestoreBoardRepository` to upload a generated portrait's bytes and
   fetch them back for the portrait route above.
 - `backend/src/main/resources/static/` — the whole frontend: `index.html` +
-  `app.js` (board list/create view and board detail/add-character view,
-  hash-routed at `#/board/<id>`), a
+  `app.js` (board list/create view, board detail/add-character view, and the
+  pass-and-play game view, hash-routed at `#/board/<id>` and
+  `#/board/<id>/play`), `templates.js` (every markup-building function
+  `app.js` calls, kept separate — see `CLAUDE.md`), a
   [Cropper.js](https://github.com/fengyuanchen/cropperjs) crop box (vendored
   locally in `static/vendor/`, no CDN dependency), and `styles.css`.
 
 No frontend build step, no framework — plain HTML/CSS/JS served directly by
 Ktor. Persistence is Firestore (Native mode), no other database.
+
+## Tests
+
+Backend (JUnit 5, via Gradle):
+```bash
+cd backend
+./gradlew test
+```
+
+Frontend (Playwright, against the static files directly — no Kotlin backend
+involved; every `fetch()` call the app makes is intercepted with fixture
+data, the same way the backend tests swap in `InMemoryBoardRepository`
+instead of hitting Firestore):
+```bash
+npm install
+npx playwright install chromium   # first run only
+npm test
+```
+Test files live in `tests/`: `templates.spec.js` covers the markup
+functions in `templates.js`, `board-views.spec.js` covers the board
+list/detail views, `pass-and-play.spec.js` covers the full game flow.
 
 ## Deploying (Cloud Build → Cloud Run)
 

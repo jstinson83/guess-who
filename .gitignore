@@ -31,3 +31,7 @@ backend/build/
 # Runtime data (SQLite db + uploaded photos)
 backend/data/
 
+# Playwright (frontend tests)
+test-results/
+playwright-report/
+
