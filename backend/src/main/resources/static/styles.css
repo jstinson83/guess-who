@@ -8,6 +8,7 @@
   --accent-hover: #c22a21;
   --accent-2: #ffc93c;
   --navy: #1f3f6e;
+  --navy-light: #62799a;
   --navy-soft: rgba(31, 63, 110, 0.12);
   --border: #ecdfc0;
   --good: #3a8f47;
@@ -76,6 +77,7 @@ section.hidden {
   padding: 0;
   margin-bottom: 1rem;
   cursor: pointer;
+  box-shadow: none;
 }
 
 .link-btn:hover {
@@ -446,14 +448,24 @@ button {
   font-weight: 600;
   padding: 0.75rem 1.5rem;
   border-radius: 999px;
-  border: none;
+  border: 3px solid var(--navy);
   background: var(--accent);
   color: #fff;
   cursor: pointer;
+  box-shadow: 0 4px 0 var(--navy-light);
+  transform: translateY(0);
+  transition: transform 0.08s ease, box-shadow 0.08s ease, background 0.15s ease;
 }
 
 button:hover:not(:disabled) {
   background: var(--accent-hover);
+}
+
+/* Chunky "pop" press: excludes the small circular/icon buttons and the plain text
+   link-btn, which reset border/box-shadow to none below and shouldn't animate. */
+button:active:not(:disabled):not(.fab-main):not(.fab-option):not(.counter-btn):not(.link-btn) {
+  transform: translateY(4px);
+  box-shadow: 0 0 0 var(--navy-light);
 }
 
 button:disabled {
@@ -525,6 +537,7 @@ button:disabled {
   width: 60px;
   height: 60px;
   border-radius: 50%;
+  border: none;
   font-size: 1.8rem;
   line-height: 1;
   padding: 0;
@@ -543,6 +556,7 @@ button:disabled {
   width: 44px;
   height: 44px;
   border-radius: 50%;
+  border: none;
   padding: 0;
   display: flex;
   align-items: center;
@@ -742,6 +756,7 @@ button:disabled {
   line-height: 1;
   color: #fff;
   cursor: pointer;
+  box-shadow: none;
 }
 
 .counter-btn-decrement {
