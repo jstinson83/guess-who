@@ -120,11 +120,7 @@ async function showBoardList() {
       const card = document.createElement('a');
       card.className = 'board-card';
       card.href = `#/board/${board.id}`;
-      card.innerHTML = `
-        <div class="board-card-name">${escapeHtml(board.name)}</div>
-        <div class="board-card-meta">${board.characterCount}/${board.targetSize} characters</div>
-        <span class="badge badge-${board.status.toLowerCase()}">${board.status === 'COMPLETE' ? 'Complete' : 'In progress'}</span>
-      `;
+      card.innerHTML = boardCardHtml(board);
       boardList.appendChild(card);
     }
   } catch (err) {
@@ -219,10 +215,7 @@ function renderFeatureBalance() {
     const stateClass = status.state.toLowerCase();
     const pill = document.createElement('div');
     pill.className = `feature-balance-pill feature-balance-${stateClass}`;
-    pill.innerHTML = `
-      <span>${escapeHtml(status.label)}</span>
-      <span class="feature-balance-count">${status.currentYes}/${status.targetYesMin}–${status.targetYesMax}</span>
-    `;
+    pill.innerHTML = featureBalancePillHtml(status);
     featureBalanceGrid.appendChild(pill);
   }
 }
@@ -249,11 +242,7 @@ function renderCharacterGrid() {
     card.tabIndex = 0;
     card.setAttribute('role', 'button');
     const traitLabels = traitLabelsFor(character);
-    card.innerHTML = `
-      <img src="${character.portraitUrl || ''}" alt="${escapeHtml(character.name)}" />
-      <div class="character-card-name">${escapeHtml(character.name || 'Unnamed')}</div>
-      <div class="character-card-traits">${escapeHtml(traitLabels || 'No features')}</div>
-    `;
+    card.innerHTML = characterCardHtml(character, traitLabels);
     characterGrid.appendChild(card);
   }
 }
@@ -357,25 +346,11 @@ function renderGame() {
   }
 }
 
-function gameCardHtml(character) {
-  return `
-    <img src="${character.portraitUrl || ''}" alt="${escapeHtml(character.name)}" />
-    <div class="game-card-name">${escapeHtml(character.name || 'Unnamed')}</div>
-  `;
-}
-
 // Setup phase: each player privately picks the character the *other* player will have to
 // guess. The pass-device interstitial (see renderPassScreen) is what keeps it private.
 function renderPickScreen(player) {
   const otherPlayer = player === 1 ? 2 : 1;
-  gameContent.innerHTML = `
-    <h1>Player ${player}: pick your character</h1>
-    <p class="subtitle">Don't let Player ${otherPlayer} see — this is who they'll have to guess.</p>
-    <div class="game-card-grid" id="pickGrid"></div>
-    <div class="board-complete-actions">
-      <button id="confirmPickBtn" disabled>Confirm pick</button>
-    </div>
-  `;
+  gameContent.innerHTML = pickScreenHtml(player, otherPlayer);
 
   const pickGrid = document.getElementById('pickGrid');
   let selectedId = null;
@@ -410,13 +385,7 @@ function renderPassScreen() {
   const subtitle = gameState.phase === 'PASS_TO_1'
     ? 'Both characters are picked — ready to play.'
     : `Player ${toPlayer}, get ready to pick your character next.`;
-  gameContent.innerHTML = `
-    <div class="pass-screen">
-      <h1>Pass the device to Player ${toPlayer}</h1>
-      <p>${escapeHtml(subtitle)}</p>
-      <button id="passContinueBtn">I'm Player ${toPlayer}, continue</button>
-    </div>
-  `;
+  gameContent.innerHTML = passScreenHtml(toPlayer, subtitle);
   document.getElementById('passContinueBtn').addEventListener('click', () => {
     gameState.phase = gameState.phase === 'PASS_TO_2' ? 'PICK2' : 'PLAYING';
     renderGame();
@@ -439,25 +408,12 @@ function renderPlayScreen() {
   const candidateIds = new Set(remainingCandidates(player).map((c) => c.id));
   const myAnswers = gameState.answers[player];
 
-  gameContent.innerHTML = `
-    <div class="game-turn-header">
-      <h1>Player ${player}'s turn</h1>
-      <div class="counter">
-        <div class="counter-label">Remaining</div>
-        <div class="counter-value">${candidateIds.size}</div>
-      </div>
-    </div>
-    <div class="game-card-grid" id="playGrid"></div>
-    <div class="question-panel">
-      <h2 class="question-panel-title">${gameState.turnActionTaken ? 'Question asked' : 'Ask a question'}</h2>
-      <div class="trait-ask-grid" id="traitAskGrid"></div>
-    </div>
-    <div class="board-complete-actions">
-      ${gameState.turnActionTaken
-        ? `<button id="endTurnBtn">Pass to Player ${opponent}</button>`
-        : `<button id="finalGuessBtn">Make final guess</button>`}
-    </div>
-  `;
+  gameContent.innerHTML = playScreenHtml({
+    player,
+    opponent,
+    remainingCount: candidateIds.size,
+    turnActionTaken: gameState.turnActionTaken,
+  });
 
   const playGrid = document.getElementById('playGrid');
   for (const character of currentBoard.characters) {
@@ -475,9 +431,7 @@ function renderPlayScreen() {
     btn.className = 'trait-ask-btn';
     btn.dataset.id = feature.id;
     btn.disabled = asked || gameState.turnActionTaken;
-    btn.innerHTML = asked
-      ? `<span>${escapeHtml(feature.label)}</span><span class="trait-ask-answer trait-ask-answer-${myAnswers[feature.id] ? 'yes' : 'no'}">${myAnswers[feature.id] ? 'Yes' : 'No'}</span>`
-      : `<span>${escapeHtml(feature.label)}</span>`;
+    btn.innerHTML = traitAskButtonHtml({ label: feature.label, asked, answer: myAnswers[feature.id] });
     traitAskGrid.appendChild(btn);
   }
   traitAskGrid.addEventListener('click', (e) => {
@@ -516,16 +470,7 @@ function endTurn() {
 function showGuessPicker(player, opponent) {
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
-  overlay.innerHTML = `
-    <div class="modal guess-picker-modal">
-      <h2>Who do you think it is?</h2>
-      <div class="game-card-grid" id="guessGrid"></div>
-      <div class="board-complete-actions">
-        <button id="confirmGuessBtn" disabled>Confirm guess</button>
-      </div>
-      <button class="link-btn" id="cancelGuessBtn">Cancel</button>
-    </div>
-  `;
+  overlay.innerHTML = guessPickerHtml();
   document.body.appendChild(overlay);
 
   const guessGrid = document.getElementById('guessGrid');
@@ -578,21 +523,12 @@ function renderGameOverScreen() {
     ? `Player ${gameState.guesser} guessed correctly!`
     : `Player ${gameState.guesser} guessed wrong — Player ${gameState.winner} wins by default.`;
 
-  gameContent.innerHTML = `
-    <div class="game-over-content">
-      <h1>Player ${gameState.winner} wins!</h1>
-      <p class="subtitle">${escapeHtml(message)}</p>
-      <div class="game-over-reveal">
-        <div class="game-over-reveal-card">
-          <div class="game-card">${gameCardHtml(winnerSecret)}</div>
-        </div>
-        <div class="game-over-reveal-card">
-          <div class="game-card">${gameCardHtml(loserSecret)}</div>
-        </div>
-      </div>
-      <button id="playAgainBtn">Play again</button>
-    </div>
-  `;
+  gameContent.innerHTML = gameOverHtml({
+    winner: gameState.winner,
+    message,
+    winnerCardHtml: gameCardHtml(winnerSecret),
+    loserCardHtml: gameCardHtml(loserSecret),
+  });
   document.getElementById('playAgainBtn').addEventListener('click', () => {
     startNewGame();
     renderGame();
@@ -763,12 +699,7 @@ function renderTraits() {
     const label = document.createElement('label');
     label.className = 'switch' + (feature.available ? '' : ' switch-disabled');
     label.title = reason;
-    label.innerHTML = `
-      <input type="checkbox" value="${feature.id}" data-exclusive-with="${feature.exclusiveWith.join(',')}" ${feature.available ? '' : 'disabled'} ${shouldCheck ? 'checked' : ''} />
-      <span class="switch-track"></span>${escapeHtml(feature.label)}
-      ${status ? `<span class="switch-count switch-count-${stateClass}">${status.currentYes}/${status.targetYesMin}–${status.targetYesMax}</span>` : ''}
-      ${reason ? `<span class="switch-reason">${escapeHtml(reason)}</span>` : ''}
-    `;
+    label.innerHTML = traitSwitchHtml({ feature, shouldCheck, status, stateClass, reason });
     traitsEl.appendChild(label);
   }
   updateTraitsSummary();
@@ -890,9 +821,3 @@ characterModalDismissBtn.addEventListener('click', dismissCharacterModal);
 characterModal.addEventListener('click', (e) => {
   if (e.target === characterModal) dismissCharacterModal();
 });
-
-function escapeHtml(str) {
-  const div = document.createElement('div');
-  div.textContent = str ?? '';
-  return div.innerHTML;
-}
