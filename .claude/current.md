@@ -92,3 +92,32 @@ spec, not a maintainer commitment.
 
 - [ ] Generate a playable mobile game from a completed board
 - [ ] Save and edit generated games
+
+## Ideas under discussion (not yet scoped, not in the spec)
+
+Raised in conversation, not yet decided enough to become roadmap items or
+spec changes. Revisit before scoping.
+
+- [ ] Async two-device play: shareable game code/link as the room
+      identifier (no accounts required for this alone); each device holds
+      an anonymous per-game seat token. Open question: polling vs. live
+      updates (Firestore listeners) — lean polling unless "opponent is
+      live" feel is wanted.
+- [ ] Lightweight accounts for a "my boards" list across devices — decided
+      worth doing; not yet scoped (just "sign in with Google" vs. full
+      auth, how it interacts with link-based sharing of boards containing
+      real people's photos).
+- [ ] Seed photo bank: a small curated set of *reusable* real base photos,
+      not one photo per character — the same base photo can back multiple
+      differently-mutated characters, since the trait mutations (not the
+      underlying face) are what make characters distinguishable. Reuses
+      `generatePortrait()` as-is; the only new pipeline piece is where the
+      source photo comes from. Explicitly deviates from the spec's
+      "featuring people you actually know" / recognizability framing —
+      needs a `docs/PRODUCT_SPEC.md` update if/when this gets built, not
+      just a quiet code addition. Open questions: how drastic mutations
+      need to be before reusing a base photo within the same board risks
+      two characters reading as visually similar (maintainer wants to
+      test empirically rather than pre-restrict); licensing/rights for
+      photos reused across many boards/users (stricter than a one-off
+      test fixture, closer to stock-license territory).
