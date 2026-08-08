@@ -105,13 +105,13 @@
     </section>
   </main>
 
-  <!-- New character confirmation -->
-  <div id="newCharacterModal" class="modal-overlay hidden">
+  <!-- Character modal: shown on successful create, and when a board tile is clicked -->
+  <div id="characterModal" class="modal-overlay hidden">
     <div class="modal">
-      <h2>New character created!</h2>
-      <img id="newCharacterPortrait" class="modal-portrait" alt="" />
-      <div id="newCharacterName" class="modal-name"></div>
-      <button id="newCharacterDismissBtn">Done</button>
+      <h2 id="characterModalTitle"></h2>
+      <img id="characterModalPortrait" class="modal-portrait" alt="" />
+      <div id="characterModalSubtitle" class="modal-subtitle"></div>
+      <button id="characterModalDismissBtn">Done</button>
     </div>
   </div>
 
