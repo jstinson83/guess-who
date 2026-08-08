@@ -232,7 +232,7 @@ section.hidden {
   position: absolute;
   width: 90px;
   height: 90px;
-  opacity: 0.16;
+  opacity: 0.7;
   pointer-events: none;
   background-image: repeating-linear-gradient(
     -45deg,
