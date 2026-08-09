@@ -56,10 +56,25 @@ function traitSwitchHtml({ feature, shouldCheck, status, stateClass, reason }) {
 
 // --- Pass-and-play game ---
 
-function gameCardHtml(character) {
+// showName is false for the main play-screen board, which hides names to match a
+// physical Guess Who board — tapping a card there opens gameCardDetailModalHtml instead.
+// Every other grid (pick, guess, game-over reveal) keeps the name, since those are
+// already click-to-choose (or click-to-confirm-the-answer) screens.
+function gameCardHtml(character, { showName = true } = {}) {
   return `
     <img src="${character.portraitUrl || ''}" alt="${escapeHtml(character.name)}" />
-    <div class="game-card-name">${escapeHtml(character.name || 'Unnamed')}</div>
+    ${showName ? `<div class="game-card-name">${escapeHtml(character.name || 'Unnamed')}</div>` : ''}
+  `;
+}
+
+function gameCardDetailModalHtml({ name, portraitUrl, traitLabels }) {
+  return `
+    <div class="modal game-card-detail-modal">
+      <img class="modal-portrait" src="${portraitUrl || ''}" alt="${escapeHtml(name || 'Unnamed')}" />
+      <h2>${escapeHtml(name || 'Unnamed')}</h2>
+      <p class="modal-subtitle">${escapeHtml(traitLabels || 'No features')}</p>
+      <button class="link-btn" id="closeGameCardDetailBtn">Close</button>
+    </div>
   `;
 }
 

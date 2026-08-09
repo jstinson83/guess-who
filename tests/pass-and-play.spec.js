@@ -155,6 +155,34 @@ test.describe('grouped trait categories', () => {
   });
 });
 
+test.describe('play-screen board cards', () => {
+  test('the board hides names but a tap reveals name and traits in a dialog', async ({ page }) => {
+    await completeSetup(page, 'alice', 'bob');
+
+    // Alice has ['glasses'] — the board itself shows no names, only portraits.
+    await expect(page.locator('#playGrid .game-card-name')).toHaveCount(0);
+
+    await page.click('#playGrid .game-card[data-id="alice"]');
+    await expect(page.locator('.game-card-detail-modal')).toBeVisible();
+    await expect(page.locator('.game-card-detail-modal h2')).toHaveText('Alice');
+    await expect(page.locator('.game-card-detail-modal .modal-subtitle')).toHaveText('Glasses');
+
+    await page.click('#closeGameCardDetailBtn');
+    await expect(page.locator('.game-card-detail-modal')).toBeHidden();
+    // Closing the dialog doesn't disturb the turn in progress.
+    await expect(page.locator('#gameContent h1')).toHaveText("Player 1's turn");
+  });
+
+  test('a face-down (eliminated) card can still be inspected', async ({ page }) => {
+    await completeSetup(page, 'alice', 'bob');
+    await page.click('#traitAskGrid .trait-ask-btn[data-id="glasses"]'); // No — eliminates glasses-wearers
+    await expect(page.locator('#playGrid .game-card[data-id="carol"]')).toHaveClass(/game-card-facedown/);
+
+    await page.click('#playGrid .game-card[data-id="carol"]');
+    await expect(page.locator('.game-card-detail-modal h2')).toHaveText('Carol');
+  });
+});
+
 test.describe('play', () => {
   test('each player has an independent candidate count', async ({ page }) => {
     await completeSetup(page, 'alice', 'bob');

@@ -564,10 +564,17 @@ function renderPlayScreen() {
   const playGrid = document.getElementById('playGrid');
   for (const character of currentBoard.characters) {
     const card = document.createElement('div');
-    card.className = 'game-card' + (candidateIds.has(character.id) ? '' : ' game-card-facedown');
-    card.innerHTML = gameCardHtml(character);
+    card.className = 'game-card game-card-clickable' + (candidateIds.has(character.id) ? '' : ' game-card-facedown');
+    card.dataset.id = character.id;
+    card.innerHTML = gameCardHtml(character, { showName: false });
     playGrid.appendChild(card);
   }
+  playGrid.addEventListener('click', (e) => {
+    const card = e.target.closest('.game-card');
+    if (!card) return;
+    const character = currentBoard.characters.find((c) => c.id === card.dataset.id);
+    if (character) showGameCardDetail(character);
+  });
 
   const traitAskGrid = document.getElementById('traitAskGrid');
   const renderedGroups = new Set();
@@ -613,6 +620,26 @@ function renderPlayScreen() {
   } else {
     document.getElementById('finalGuessBtn').addEventListener('click', () => showGuessPicker(player, opponent));
   }
+}
+
+// The main play-screen board hides character names (see gameCardHtml's showName) to read
+// more like a physical Guess Who board — tapping a card instead opens this modal with the
+// name and full trait list. Not a fairness leak: every character's appearance/traits are
+// already visible on the board to both players, only the two secret picks are hidden.
+function showGameCardDetail(character) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = gameCardDetailModalHtml({
+    name: character.name,
+    portraitUrl: character.portraitUrl,
+    traitLabels: traitLabelsFor(character),
+  });
+  document.body.appendChild(overlay);
+
+  overlay.querySelector('#closeGameCardDetailBtn').addEventListener('click', () => overlay.remove());
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) overlay.remove();
+  });
 }
 
 // Modal for a grouped category button (e.g. "Hair color") in the trait-ask grid — lets a
