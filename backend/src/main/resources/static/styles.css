@@ -1109,16 +1109,22 @@ button:disabled {
   color: var(--accent);
 }
 
-/* --- Grouped trait category button (e.g. "Hair color") + its option modal ---
-   Collapses a set of mutually-exclusive features into one entry in the trait-ask
-   grid; tapping it opens a small modal to ask about a specific option. Keeps the
-   flat grid short enough to fit a phone screen without scrolling through every
-   light/dark, big/small, young/old pair individually. */
+/* --- Grouped trait category button (e.g. "Hair", "Accessories") + its option modal ---
+   Collapses a whole topic's worth of features into one entry in the trait-ask grid
+   (not just forced-choice pairs — e.g. "Accessories" covers glasses/hat/earrings/bow
+   tie/cowboy hat, none of them mutually exclusive); tapping it opens a modal to ask
+   about a specific option. Keeps the flat grid short enough to fit a phone screen
+   without scrolling through every one of the pool's ~20 features individually. */
 
 .trait-group-summary {
   font-size: 0.78rem;
   color: var(--muted);
   text-align: right;
+}
+
+.trait-group-modal {
+  max-height: 85vh;
+  overflow-y: auto;
 }
 
 .trait-group-modal .trait-group-options {
@@ -1178,12 +1184,12 @@ button:disabled {
      lays out in comfortable rows on a standard phone width (~360-430px) instead
      of the desktop 120px-minimum tiles forcing only 2 cramped columns. */
   .game-card-grid {
-    grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
-    gap: 0.5rem;
+    grid-template-columns: repeat(auto-fill, minmax(75px, 1fr));
+    gap: 0.4rem;
   }
   .game-card-name {
-    font-size: 0.72rem;
-    padding: 0.3rem 0.1rem 0.05rem;
+    font-size: 0.68rem;
+    padding: 0.25rem 0.1rem 0.05rem;
   }
   .trait-ask-grid {
     grid-template-columns: 1fr;

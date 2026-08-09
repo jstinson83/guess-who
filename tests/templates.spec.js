@@ -198,18 +198,21 @@ test.describe('game screens', () => {
     expect(html).not.toContain('trait-ask-answer');
   });
 
-  test('traitGroupButtonHtml summarizes answered options within the group', async ({ page }) => {
+  test('traitGroupButtonHtml shows an asked-count summary once some options are answered', async ({ page }) => {
     const html = await page.evaluate(() =>
       traitGroupButtonHtml({
-        label: 'Hair color',
-        options: [{ id: 'hair_light', label: 'Light hair' }, { id: 'hair_dark', label: 'Dark hair' }],
+        label: 'Hair',
+        options: [
+          { id: 'hair_light', label: 'Light hair' },
+          { id: 'hair_dark', label: 'Dark hair' },
+          { id: 'bald', label: 'Bald' },
+        ],
         myAnswers: { hair_light: false },
       })
     );
-    expect(html).toContain('Light hair');
-    expect(html).toContain('trait-ask-answer-no');
-    expect(html).toContain('No');
-    expect(html).not.toContain('Dark hair:');
+    expect(html).toContain('Hair');
+    expect(html).toContain('1/3 asked');
+    expect(html).not.toContain('Choose');
   });
 
   test('traitGroupModalHtml renders one button per option, disabling already-asked ones', async ({ page }) => {

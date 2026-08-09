@@ -25,6 +25,14 @@ class DefaultFeaturePoolTest {
     }
 
     @Test
+    fun `every groupLabel is shared by at least two features`() {
+        val byGroup = DefaultFeaturePool.allFeatures().filter { it.groupLabel != null }.groupBy { it.groupLabel }
+        for ((label, members) in byGroup) {
+            assertTrue(members.size >= 2, "'$label' only has one member (${members.single().id}) — not worth grouping")
+        }
+    }
+
+    @Test
     fun `exclusiveWith links are symmetric and point at real feature ids`() {
         val byId = DefaultFeaturePool.allFeatures().associateBy { it.id }
         for (feature in byId.values) {
