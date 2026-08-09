@@ -570,7 +570,22 @@ function renderPlayScreen() {
   }
 
   const traitAskGrid = document.getElementById('traitAskGrid');
+  const renderedGroups = new Set();
   for (const feature of currentBoard.featureStatuses) {
+    if (feature.groupLabel) {
+      if (renderedGroups.has(feature.groupLabel)) continue;
+      renderedGroups.add(feature.groupLabel);
+      const options = currentBoard.featureStatuses.filter((f) => f.groupLabel === feature.groupLabel);
+      const askedCount = options.filter((o) => Object.prototype.hasOwnProperty.call(myAnswers, o.id)).length;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'trait-ask-btn trait-group-btn';
+      btn.dataset.group = feature.groupLabel;
+      btn.disabled = gameState.turnActionTaken || askedCount === options.length;
+      btn.innerHTML = traitGroupButtonHtml({ label: feature.groupLabel, options, myAnswers });
+      traitAskGrid.appendChild(btn);
+      continue;
+    }
     const asked = Object.prototype.hasOwnProperty.call(myAnswers, feature.id);
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -581,6 +596,13 @@ function renderPlayScreen() {
     traitAskGrid.appendChild(btn);
   }
   traitAskGrid.addEventListener('click', (e) => {
+    const groupBtn = e.target.closest('.trait-group-btn');
+    if (groupBtn) {
+      if (groupBtn.disabled) return;
+      const options = currentBoard.featureStatuses.filter((f) => f.groupLabel === groupBtn.dataset.group);
+      showTraitGroupModal(groupBtn.dataset.group, options, myAnswers);
+      return;
+    }
     const btn = e.target.closest('.trait-ask-btn');
     if (!btn || btn.disabled) return;
     askTrait(btn.dataset.id);
@@ -591,6 +613,27 @@ function renderPlayScreen() {
   } else {
     document.getElementById('finalGuessBtn').addEventListener('click', () => showGuessPicker(player, opponent));
   }
+}
+
+// Modal for a grouped category button (e.g. "Hair color") in the trait-ask grid — lets a
+// player pick which specific option within the group to ask about, instead of every
+// mutually-exclusive option cluttering the flat trait-ask grid on a small screen.
+function showTraitGroupModal(label, options, myAnswers) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = traitGroupModalHtml({ label, options, myAnswers });
+  document.body.appendChild(overlay);
+
+  document.getElementById('traitGroupOptions').addEventListener('click', (e) => {
+    const btn = e.target.closest('.trait-ask-btn');
+    if (!btn || btn.disabled) return;
+    overlay.remove();
+    askTrait(btn.dataset.id);
+  });
+  document.getElementById('cancelTraitGroupBtn').addEventListener('click', () => overlay.remove());
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) overlay.remove();
+  });
 }
 
 // The answer comes from the opponent's own stored traits — the app is the honest referee,

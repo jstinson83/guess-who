@@ -68,6 +68,7 @@ data class FeatureStatusDto(
     val targetYesMin: Int,
     val targetYesMax: Int,
     val state: String,
+    val groupLabel: String? = null,
 )
 
 @Serializable
@@ -481,6 +482,7 @@ private fun BoardState.toDetailDto() = BoardDetailDto(
             targetYesMin = it.targetYesRange.first,
             targetYesMax = it.targetYesRange.last,
             state = it.state.name,
+            groupLabel = it.feature.groupLabel,
         )
     },
     availableFeatures = BoardBalancer.availableFeatures(this).map {
