@@ -112,20 +112,17 @@ function traitAskButtonHtml({ label, asked, answer }) {
     : `<span>${escapeHtml(label)}</span>`;
 }
 
-// A category button collapsing a group of mutually-exclusive features (e.g. "Hair color"
-// covering hair_light/hair_dark) into one entry in the trait-ask grid — tapping it opens
-// traitGroupModalHtml to ask about a specific option, instead of listing every option flat.
+// A category button collapsing a whole topic's worth of features (e.g. "Accessories"
+// covering glasses/hat/earrings/bow tie/cowboy hat — not just forced-choice pairs) into
+// one entry in the trait-ask grid. Tapping it opens traitGroupModalHtml to ask about a
+// specific option, instead of listing every option flat. Summary is a plain asked-count
+// rather than every option's answer, since a category can hold several options — spelling
+// each one out (as a 2-option pair could) risks wrapping/overflow on a narrow phone button.
 function traitGroupButtonHtml({ label, options, myAnswers }) {
-  const answered = options.filter((o) => Object.prototype.hasOwnProperty.call(myAnswers, o.id));
-  const summary = answered
-    .map(
-      (o) =>
-        `${escapeHtml(o.label)}: <span class="trait-ask-answer trait-ask-answer-${myAnswers[o.id] ? 'yes' : 'no'}">${myAnswers[o.id] ? 'Yes' : 'No'}</span>`
-    )
-    .join(', ');
+  const answeredCount = options.filter((o) => Object.prototype.hasOwnProperty.call(myAnswers, o.id)).length;
   return `
     <span>${escapeHtml(label)}</span>
-    <span class="trait-group-summary">${summary || 'Choose…'}</span>
+    <span class="trait-group-summary">${answeredCount > 0 ? `${answeredCount}/${options.length} asked` : 'Choose…'}</span>
   `;
 }
 

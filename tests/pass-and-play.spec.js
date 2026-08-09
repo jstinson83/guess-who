@@ -134,11 +134,11 @@ test.describe('grouped trait categories', () => {
     await expect(page.locator('.trait-group-modal .trait-ask-btn[data-id="hair_light"]')).toBeVisible();
     await expect(page.locator('.trait-group-modal .trait-ask-btn[data-id="hair_dark"]')).toBeVisible();
 
-    // Bob (Player 2's secret) has dark hair, so asking "Light hair?" answers No.
+    // Bob (Player 2's secret) has dark hair, so asking "Light hair?" answers No — the
+    // category button just tracks how many of its options have been asked so far.
     await page.click('.trait-group-modal .trait-ask-btn[data-id="hair_light"]');
     await expect(page.locator('.trait-group-modal')).toBeHidden();
-    await expect(page.locator('#traitAskGrid .trait-group-btn')).toContainText('Light hair');
-    await expect(page.locator('#traitAskGrid .trait-group-btn .trait-ask-answer')).toHaveText('No');
+    await expect(page.locator('#traitAskGrid .trait-group-btn')).toContainText('1/2 asked');
 
     // The category is used up for the turn, same as any other trait-ask button.
     await expect(page.locator('#traitAskGrid .trait-group-btn')).toBeDisabled();
