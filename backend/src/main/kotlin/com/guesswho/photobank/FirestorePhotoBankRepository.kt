@@ -2,7 +2,6 @@ package com.guesswho.photobank
 
 import com.google.cloud.firestore.DocumentSnapshot
 import com.google.cloud.firestore.Firestore
-import com.google.cloud.firestore.Query
 import com.guesswho.board.await
 import com.guesswho.storage.PortraitStore
 import com.guesswho.storage.StoredPortrait
@@ -44,11 +43,18 @@ class FirestorePhotoBankRepository(
         return PhotoBankPhoto(id = ref.id, bankId = bankId, detectedFeatures = detectedFeatures, createdAt = now)
     }
 
+    // Sorted client-side rather than via Firestore's own orderBy: combining whereEqualTo on one
+    // field with orderBy on another requires a manually-provisioned composite index, which this
+    // project never created (or documented as one-time GCP setup, unlike the database/bucket/IAM
+    // steps in README.md) — every call would fail with a "query requires an index" error,
+    // regardless of how many photos actually match. createdAt is an ISO-8601 string
+    // (Instant.now().toString()), which sorts lexically identically to chronological order, so a
+    // plain string sort is exact, not an approximation.
     override suspend fun listPhotos(bankId: String): List<PhotoBankPhoto> =
         photos.whereEqualTo("bankId", bankId)
-            .orderBy("createdAt", Query.Direction.DESCENDING)
             .get().await()
             .documents.map { it.toPhoto() }
+            .sortedByDescending { it.createdAt }
 
     override suspend fun getPhoto(bankId: String, photoId: String): PhotoBankPhoto? {
         val doc = photos.document(photoId).get().await()

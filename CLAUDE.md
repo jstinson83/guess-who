@@ -82,6 +82,18 @@ version and then rebuilt with boards + Firestore in a later session — see
 
 ## Operational gotchas
 
+- **Every unhandled exception returns a JSON error envelope, not an empty
+  body**: `Application.kt` installs Ktor's `StatusPages` plugin with a
+  catch-all `exception<Throwable>` handler that responds
+  `500 {"error": "..."}`. Without it, an unhandled exception (e.g. a `Lazy`
+  repository failing to build its GCP client) falls through to Ktor's
+  default handling, which returns a bare 500 with a genuinely empty body —
+  every frontend call site does `await res.json()` unconditionally, so an
+  empty body crashes with a raw, unhelpful "Unexpected end of JSON input"
+  instead of showing any real error. Any new route that can throw relies on
+  this catch-all rather than needing its own try/catch — only add one
+  locally if a route needs a *different* status code or message than the
+  generic 500 envelope.
 - **Gemini model names**: two call sites now, two different models, each a
   single constant next to its call site rather than scattered inline
   strings. Image generation (`generatePortrait` in `Gemini.kt`) uses
@@ -200,3 +212,17 @@ version and then rebuilt with boards + Firestore in a later session — see
       is built lazily alongside `BoardRepository` in `Application.kt` for
       the same reason — a plain `/api/transform`-only local run shouldn't
       need any GCP setup.
+  - **No compound `whereEqualTo` + `orderBy` queries**: Firestore only
+    auto-indexes single-field queries. Filtering on one field and ordering
+    by a *different* field (e.g. `FirestorePhotoBankRepository.listPhotos`
+    originally did `whereEqualTo("bankId", ...).orderBy("createdAt", ...)`)
+    needs a manually-provisioned composite index — and every call fails
+    until it exists, regardless of how many documents match, so an empty
+    result looks identical to a broken query from the caller's side. This
+    project doesn't provision composite indexes (no step for it in
+    `README.md`, unlike the database/bucket/IAM steps), so avoid queries
+    that need one: filter server-side with `whereEqualTo` alone (auto-indexed)
+    and sort the results client-side in Kotlin instead — see
+    `listPhotos`'s `sortedByDescending { it.createdAt }` (safe because
+    `createdAt` is an ISO-8601 string, which sorts lexically identically to
+    chronological order).

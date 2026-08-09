@@ -28,6 +28,7 @@ import io.ktor.server.http.content.staticResources
 import io.ktor.server.netty.Netty
 import io.ktor.server.plugins.callloging.CallLogging
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.server.plugins.statuspages.StatusPages
 import io.ktor.server.request.receiveMultipart
 import io.ktor.server.response.respond
 import io.ktor.server.routing.post
@@ -62,6 +63,17 @@ fun Application.module() {
         json()
     }
     install(CallLogging)
+    // Without this, an unhandled exception (e.g. a Lazy repository failing to build its GCP
+    // client because application-default credentials aren't configured) falls through to
+    // Ktor's default error handling, which returns a bare 500 with an *empty* body — every
+    // frontend call site does `await res.json()` expecting an error envelope, so an empty body
+    // crashes with a raw "Unexpected end of JSON input" instead of showing anything useful.
+    install(StatusPages) {
+        exception<Throwable> { call, cause ->
+            call.application.environment.log.error("Unhandled exception", cause)
+            call.respond(HttpStatusCode.InternalServerError, mapOf("error" to (cause.message ?: "Internal server error")))
+        }
+    }
 
     val httpClient = HttpClient(CIO) {
         install(ClientContentNegotiation) {
