@@ -10,9 +10,56 @@ breaks down.
 
 ## Active task
 
-None currently — the maintainer's last active-task plan (pass-and-play game
-screen from a completed board) is done; see "Game generation" below for
-what landed.
+Photo Library: a board-agnostic library of real people's own photos +
+their detected features, browsable on its own and usable as an alternate
+source for a board's add-character flow. Broken into independently
+testable chunks; tackle in order, each shippable/verifiable before
+starting the next.
+
+- [ ] **Chunk 1 — backend storage/data layer** (no routes, no UI):
+      `PhotoBankRepository` interface + `FirestorePhotoBankRepository` +
+      an in-memory impl for tests, mirroring `BoardRepository`'s split.
+      Generalize `PortraitOptimizer`'s `MAX_DIMENSION` into a parameter —
+      bank photos resize to ~1024px longest edge (vs. 640px for
+      portraits), since a bank photo is also future `generatePortrait()`
+      input, not just a thumbnail. New GCS prefix
+      `photobank/{bankId}/{photoId}` in the existing portraits bucket.
+      Verify with repository unit tests only.
+- [ ] **Chunk 2 — Photo Bank HTTP API**: `POST /api/photobank/{bankId}/photos`
+      (cropped image in → resize → `detectTraits()` against the full
+      feature pool → store → return photo DTO with features), `GET
+      /api/photobank/{bankId}/photos` (list, features inline — avoids an
+      N+1 detail call), `GET
+      /api/photobank/{bankId}/photos/{photoId}/image` (stream bytes,
+      mirrors the character-portrait route), `DELETE
+      /api/photobank/{bankId}/photos/{photoId}`. Verify with curl/route
+      tests, no frontend needed yet.
+- [ ] **Chunk 3 — Photo Library screen** (frontend), fully standalone, no
+      board touches it: nav entry, grid view, "Add photo" (reuses the
+      existing Cropper.js crop step from add-character), click-to-modal
+      (photo + full detected-feature list — same click-to-modal mechanic
+      as the board screen's character modal, but new content, since that
+      modal doesn't show traits today), delete action.
+- [ ] **Chunk 4 — board integration**: add-character step 1 forks into
+      "Upload new photo" (unchanged) vs. "Choose from library" (reuses
+      chunk 3's grid+modal). Picking a library photo skips crop and
+      skips `detectTraits()` — backend accepts a `bankPhotoId` in place of
+      raw image bytes, fetches from `PhotoBankRepository`, reuses the
+      stored `detectedFeatures`, pre-checks the overlap with the board's
+      currently-available features, and records `sourcePhotoId` on the
+      created character. Deleting a bank photo later does not cascade to
+      characters already created from it — each character already holds
+      its own independent portrait + traits.
+
+Design decisions locked in during planning (recorded here since they
+aren't obvious from the code once it lands):
+- One bank for now (`bankId` hardcoded to `"default"`), but every photo
+  doc carries `bankId` so multi-bank needs no schema migration later.
+- A banked photo is the *post-crop* image — what `detectTraits()` actually
+  saw — not the pre-crop original, so stored features stay consistent
+  with the stored image.
+- Removing a bank photo is a real feature for this chunk set, not
+  deferred; it only affects future picks, never existing characters.
 
 ## Future roadmap (not yet started, no priority/timeline set)
 
@@ -106,10 +153,15 @@ spec changes. Revisit before scoping.
       worth doing; not yet scoped (just "sign in with Google" vs. full
       auth, how it interacts with link-based sharing of boards containing
       real people's photos).
-- [ ] Seed photo bank: a small curated set of *reusable* real base photos,
-      not one photo per character — the same base photo can back multiple
-      differently-mutated characters, since the trait mutations (not the
-      underlying face) are what make characters distinguishable. Reuses
+- [ ] Anonymous seed-photo pool (renamed from "Seed photo bank" — that name
+      now collides with the unrelated **Photo Library** feature under
+      "Active task" above, which stores real people's own photos for reuse
+      across their own boards; this idea is a curated pool of *anonymous*,
+      non-identity stock-style base photos, a different concept): a small
+      curated set of *reusable* base photos, not one photo per character —
+      the same base photo can back multiple differently-mutated
+      characters, since the trait mutations (not the underlying face) are
+      what make characters distinguishable. Reuses
       `generatePortrait()` as-is; the only new pipeline piece is where the
       source photo comes from. Explicitly deviates from the spec's
       "featuring people you actually know" / recognizability framing —
