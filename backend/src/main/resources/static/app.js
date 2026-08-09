@@ -1,5 +1,6 @@
 const boardListView = document.getElementById('boardListView');
 const boardDetailView = document.getElementById('boardDetailView');
+const boardLibraryPickView = document.getElementById('boardLibraryPickView');
 const cropView = document.getElementById('cropView');
 const featuresView = document.getElementById('featuresView');
 const gameView = document.getElementById('gameView');
@@ -32,8 +33,15 @@ const fabContainer = document.getElementById('fabContainer');
 const fabMain = document.getElementById('fabMain');
 const fabCamera = document.getElementById('fabCamera');
 const fabUpload = document.getElementById('fabUpload');
+const fabLibrary = document.getElementById('fabLibrary');
 const cameraInput = document.getElementById('cameraInput');
 const uploadInput = document.getElementById('uploadInput');
+
+const libraryPickBackBtn = document.getElementById('libraryPickBackBtn');
+const libraryPickPanel = document.getElementById('libraryPickPanel');
+const libraryPickOverlay = document.getElementById('libraryPickOverlay');
+const libraryPickGrid = document.getElementById('libraryPickGrid');
+const libraryPickStatus = document.getElementById('libraryPickStatus');
 
 const cropContainer = document.getElementById('cropContainer');
 const cropImage = document.getElementById('cropImage');
@@ -58,6 +66,9 @@ const characterModalSubtitle = document.getElementById('characterModalSubtitle')
 const characterModalDismissBtn = document.getElementById('characterModalDismissBtn');
 const characterModalDeleteBtn = document.getElementById('characterModalDeleteBtn');
 
+// Bank id is hardcoded to "default" — the only bank that exists today (see .claude/current.md).
+const PHOTO_BANK_ID = 'default';
+
 let cropper = null;
 let currentBoard = null;
 let detectedTraitIds = [];
@@ -76,6 +87,10 @@ let pendingCropMode = 'board';
 // one blob, since the server does its own resizing + detection on upload.
 let pendingDetectBlob = null;
 let pendingFullBlob = null;
+// Set instead of pendingDetectBlob/pendingFullBlob when the add-character flow picked a photo
+// from the Photo Library (see selectLibraryPhoto) — carries its id and already-detected features
+// straight into the features step, skipping crop and a second detectTraits() call entirely.
+let pendingBankPhoto = null;
 
 // Photo Library state: the current bank's photos, and a cached id -> label map for rendering
 // detectedFeatures (which the API only returns as ids) — fetched once from /api/features since
@@ -87,7 +102,7 @@ let libraryFeatureLabels = null;
 // add-a-character wizard steps, anything else shows the board list. ---
 
 function showOnly(view) {
-  for (const v of [boardListView, boardDetailView, cropView, featuresView, gameView, libraryView]) {
+  for (const v of [boardListView, boardDetailView, boardLibraryPickView, cropView, featuresView, gameView, libraryView]) {
     v.classList.toggle('hidden', v !== view);
   }
 }
@@ -95,6 +110,7 @@ function showOnly(view) {
 async function route() {
   characterModal.classList.add('hidden');
 
+  const pickPhotoMatch = location.hash.match(/^#\/board\/([^/]+)\/pick-photo$/);
   const cropMatch = location.hash.match(/^#\/board\/([^/]+)\/crop$/);
   const featuresMatch = location.hash.match(/^#\/board\/([^/]+)\/features$/);
   const playMatch = location.hash.match(/^#\/board\/([^/]+)\/play$/);
@@ -106,7 +122,9 @@ async function route() {
   navBoardsLink.classList.toggle('top-nav-link-active', !inLibrary);
   navLibraryLink.classList.toggle('top-nav-link-active', inLibrary);
 
-  if (cropMatch) {
+  if (pickPhotoMatch) {
+    await showBoardLibraryPickView(pickPhotoMatch[1]);
+  } else if (cropMatch) {
     await showCropView(cropMatch[1], 'board');
   } else if (featuresMatch) {
     await showFeaturesView(featuresMatch[1]);
@@ -588,16 +606,99 @@ fabUpload.addEventListener('click', () => {
   uploadInput.click();
 });
 
+fabLibrary.addEventListener('click', () => {
+  fabContainer.classList.remove('fab-open');
+  if (!currentBoard) return;
+  location.hash = `#/board/${currentBoard.id}/pick-photo`;
+});
+
 function onPhotoChosen(e) {
   const file = e.target.files[0];
   e.target.value = '';
   if (!file || !currentBoard) return;
   pendingPhotoFile = file;
+  pendingBankPhoto = null;
   location.hash = `#/board/${currentBoard.id}/crop`;
 }
 
 cameraInput.addEventListener('change', onPhotoChosen);
 uploadInput.addEventListener('change', onPhotoChosen);
+
+// --- Choose from library: an alternate first step for add-character that forks around crop +
+// detectTraits() entirely — the picked photo's features were already detected when it was added
+// to the library, so selectLibraryPhoto carries them straight into the features step. ---
+
+async function showBoardLibraryPickView(id) {
+  const ok = await ensureBoardLoaded(id);
+  if (!ok) {
+    location.hash = `#/board/${id}`;
+    return;
+  }
+  showOnly(boardLibraryPickView);
+
+  libraryPickGrid.innerHTML = '';
+  libraryPickStatus.textContent = '';
+  libraryPickStatus.className = 'status';
+  libraryPickPanel.classList.add('busy');
+  libraryPickOverlay.classList.remove('hidden');
+
+  try {
+    libraryPhotos = await fetchLibraryPhotos();
+    renderLibraryPickGrid(libraryPhotos);
+  } catch (err) {
+    libraryPickGrid.innerHTML = `<p class="status error">${escapeHtml(err.message)}</p>`;
+  } finally {
+    libraryPickPanel.classList.remove('busy');
+    libraryPickOverlay.classList.add('hidden');
+  }
+}
+
+function renderLibraryPickGrid(photos) {
+  libraryPickGrid.classList.toggle('character-grid-empty', photos.length === 0);
+  if (photos.length === 0) {
+    libraryPickGrid.innerHTML = '<p class="status">No photos in the library yet — upload one from the Photo Library first.</p>';
+    return;
+  }
+
+  libraryPickGrid.innerHTML = '';
+  for (const photo of photos) {
+    const card = document.createElement('div');
+    card.className = 'character-card';
+    card.dataset.id = photo.id;
+    card.tabIndex = 0;
+    card.setAttribute('role', 'button');
+    card.innerHTML = photoBankCardHtml(photo);
+    libraryPickGrid.appendChild(card);
+  }
+}
+
+function selectLibraryPhoto(id) {
+  if (!currentBoard) return;
+  const photo = libraryPhotos.find((p) => p.id === id);
+  if (!photo) return;
+  pendingPhotoFile = null;
+  pendingDetectBlob = null;
+  pendingFullBlob = null;
+  pendingBankPhoto = photo;
+  location.hash = `#/board/${currentBoard.id}/features`;
+}
+
+libraryPickGrid.addEventListener('click', (e) => {
+  const card = e.target.closest('.character-card');
+  if (card) selectLibraryPhoto(card.dataset.id);
+});
+
+libraryPickGrid.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const card = e.target.closest('.character-card');
+  if (!card) return;
+  e.preventDefault();
+  selectLibraryPhoto(card.dataset.id);
+});
+
+libraryPickBackBtn.addEventListener('click', () => {
+  if (currentBoard) location.hash = `#/board/${currentBoard.id}`;
+});
 
 // --- Crop step ---
 
@@ -684,7 +785,8 @@ confirmCropBtn.addEventListener('click', () => {
 
 async function showFeaturesView(id) {
   const ok = await ensureBoardLoaded(id);
-  if (!ok || !pendingDetectBlob || !pendingFullBlob) {
+  const usingLibraryPhoto = Boolean(pendingBankPhoto);
+  if (!ok || (!usingLibraryPhoto && (!pendingDetectBlob || !pendingFullBlob))) {
     location.hash = `#/board/${id}`;
     return;
   }
@@ -699,12 +801,19 @@ async function showFeaturesView(id) {
   duplicateWarningEl.classList.add('hidden');
   generateBtn.disabled = true;
 
-  await autoDetectTraits(pendingDetectBlob);
+  if (usingLibraryPhoto) {
+    // Already detected when the photo was added to the library — no network call, no spinner.
+    detectedTraitIds = pendingBankPhoto.detectedFeatures;
+    renderTraits();
+  } else {
+    await autoDetectTraits(pendingDetectBlob);
+  }
 }
 
 featuresBackBtn.addEventListener('click', () => {
   pendingDetectBlob = null;
   pendingFullBlob = null;
+  pendingBankPhoto = null;
   if (currentBoard) location.hash = `#/board/${currentBoard.id}`;
 });
 
@@ -819,14 +928,19 @@ function updateTraitsSummary() {
 personNameInput.addEventListener('input', updateTraitsSummary);
 
 generateBtn.addEventListener('click', async () => {
-  if (!pendingFullBlob || !currentBoard) return;
+  if (!currentBoard || (!pendingFullBlob && !pendingBankPhoto)) return;
 
   const traits = selectedTraitIds();
   const removeTraits = detectedTraitIds.filter((id) => !traits.includes(id));
   const name = personNameInput.value.trim();
 
   const form = new FormData();
-  form.append('image', pendingFullBlob, 'photo.png');
+  if (pendingBankPhoto) {
+    form.append('bankId', PHOTO_BANK_ID);
+    form.append('bankPhotoId', pendingBankPhoto.id);
+  } else {
+    form.append('image', pendingFullBlob, 'photo.png');
+  }
   form.append('name', name);
   form.append('traits', JSON.stringify(traits));
   form.append('removeTraits', JSON.stringify(removeTraits));
@@ -845,6 +959,7 @@ generateBtn.addEventListener('click', async () => {
     currentBoard = board;
     pendingDetectBlob = null;
     pendingFullBlob = null;
+    pendingBankPhoto = null;
     detectedTraitIds = [];
     const newCharacter = board.characters[board.characters.length - 1];
     showCharacterModal({
@@ -887,10 +1002,14 @@ characterModal.addEventListener('click', (e) => {
   if (e.target === characterModal) dismissCharacterModal();
 });
 
-// --- Photo Library: board-agnostic photo grid, standalone from any board. Bank id is hardcoded
-// to "default" — the only bank that exists today (see .claude/current.md). ---
+// --- Photo Library: board-agnostic photo grid, standalone from any board. ---
 
-const PHOTO_BANK_ID = 'default';
+async function fetchLibraryPhotos() {
+  const res = await fetch(`/api/photobank/${PHOTO_BANK_ID}/photos`);
+  const photos = await res.json();
+  if (!res.ok) throw new Error(photos.error || 'Failed to load photo library');
+  return photos;
+}
 
 async function ensureFeatureLabels() {
   if (libraryFeatureLabels) return libraryFeatureLabels;
@@ -912,10 +1031,7 @@ async function showLibraryView() {
 
   try {
     await ensureFeatureLabels();
-    const res = await fetch(`/api/photobank/${PHOTO_BANK_ID}/photos`);
-    const photos = await res.json();
-    if (!res.ok) throw new Error(photos.error || 'Failed to load photo library');
-    libraryPhotos = photos;
+    libraryPhotos = await fetchLibraryPhotos();
     renderLibraryGrid();
   } catch (err) {
     photoBankGrid.innerHTML = `<p class="status error">${escapeHtml(err.message)}</p>`;

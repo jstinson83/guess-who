@@ -40,7 +40,7 @@ starting the next.
       (photo + full detected-feature list — same click-to-modal mechanic
       as the board screen's character modal, but new content, since that
       modal doesn't show traits today), delete action.
-- [ ] **Chunk 4 — board integration**: add-character step 1 forks into
+- [x] **Chunk 4 — board integration**: add-character step 1 forks into
       "Upload new photo" (unchanged) vs. "Choose from library" (reuses
       chunk 3's grid+modal). Picking a library photo skips crop and
       skips `detectTraits()` — backend accepts a `bankPhotoId` in place of

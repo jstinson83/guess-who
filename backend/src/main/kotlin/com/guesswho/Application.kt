@@ -156,7 +156,7 @@ fun Application.module() {
             }
         }
 
-        boardRoutes(boardRepository, httpClient, portraitStore)
+        boardRoutes(boardRepository, httpClient, portraitStore, photoBankRepository)
         photoBankRoutes(photoBankRepository, httpClient)
         featureRoutes()
     }
