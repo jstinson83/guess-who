@@ -153,11 +153,10 @@ fun Route.boardRoutes(
         }
 
         // Creates the board in GENERATING status and returns immediately (no Gemini calls here)
-        // — the client then drives progress itself by repeatedly calling POST
-        // /{id}/random/step, one character per call, until the board leaves GENERATING. Doing it
-        // this way (client-paced steps, no server-side background job) means every unit of work
-        // happens inside a normal request/response, so there's no detached task that could stall
-        // between polls under Cloud Run's default CPU throttling — see CLAUDE.md.
+        // — the client then drives progress itself by repeatedly polling POST
+        // /{id}/random/step, which kicks at most one character's worth of work onto a background
+        // step per call (see runOneRandomStep and the activeGenerationSteps debounce below) until
+        // the board leaves GENERATING.
         post("/random") {
             val request = call.receive<RandomBoardRequest>()
             if (request.name.isBlank()) {
@@ -485,17 +484,23 @@ private suspend fun runOneRandomStep(
         return
     }
 
-    val usedPhotoIds = board.characters.mapNotNull { it.sourcePhotoId }.toSet()
-    val candidatePhotos = photoBankRepository.value.listPhotos(RANDOM_BOARD_BANK_ID).filter { it.id !in usedPhotoIds }
+    // Every bank photo is a candidate on every step, used or not — a heavily transformed
+    // portrait (especially once traits diverge from what the photo actually shows) carries
+    // its own uniqueness, so the number of characters a board can reach isn't capped by how
+    // many distinct photos are in the library.
+    val candidatePhotos = photoBankRepository.value.listPhotos(RANDOM_BOARD_BANK_ID)
     val plans = RandomBoardGenerator.plan(board, candidatePhotos).take(MAX_STEP_ATTEMPTS)
 
     if (plans.isEmpty()) {
         val shortfall = board.targetSize - board.characters.size
         val error = if (shortfall <= 0) {
             null
+        } else if (candidatePhotos.isEmpty()) {
+            "Generated ${board.characters.size} of ${board.targetSize} — the photo library is empty. " +
+                "Add photos to the library, or add the rest manually."
         } else {
-            "Generated ${board.characters.size} of ${board.targetSize} — ran out of usable library photos. " +
-                "Add more to the library, or add the rest manually."
+            "Generated ${board.characters.size} of ${board.targetSize} — the available feature pool is " +
+                "exhausted for this board's targets. Add the rest manually, or raise the target size."
         }
         repository.value.stopGenerating(boardId, error)
         return

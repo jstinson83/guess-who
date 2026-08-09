@@ -23,6 +23,14 @@ data class RandomCharacterPlan(
  * BoardRoutes.kt) — no I/O, no Gemini calls, no persistence, so it's unit-testable the same way
  * as [BoardBalancer]. The route does the actual per-plan portrait generation and persistence.
  *
+ * A bank photo can back more than one character once a board's target size exceeds the bank's
+ * size (`BoardRoutes.kt`'s step no longer excludes photos already used by this board) — [plan]
+ * spreads that reuse evenly by trying photos in ascending order of how many of [board]'s existing
+ * characters already came from them ([Character.sourcePhotoId]), shuffled within each usage tier
+ * so it's not deterministic. That keeps every bank photo's usage count within 1 of every other's
+ * in the common case, only drifting when a Gemini failure forces `BoardRoutes.kt` to fall back to
+ * a candidate further down the list for one step.
+ *
  * Policy, in priority order:
  *  1. **Likeness first**: start from what the photo actually shows
  *     ([PhotoBankPhoto.detectedFeatures]), keeping a detected trait only if
@@ -48,9 +56,10 @@ object RandomBoardGenerator {
         pool: FeaturePool = DefaultFeaturePool,
     ): List<RandomCharacterPlan> {
         val byId = pool.allFeatures().associateBy { it.id }
+        val usageCounts = board.characters.groupingBy { it.sourcePhotoId }.eachCount()
         var state = board
         val plans = mutableListOf<RandomCharacterPlan>()
-        for (photo in photos.shuffled(random)) {
+        for (photo in photos.shuffled(random).sortedBy { usageCounts[it.id] ?: 0 }) {
             if (plans.size >= BoardBalancer.slotsRemaining(state)) break
             val plan = planCharacter(state, photo, byId, random, pool) ?: continue
             plans += plan

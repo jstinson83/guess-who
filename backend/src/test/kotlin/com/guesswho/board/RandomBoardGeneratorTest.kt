@@ -84,4 +84,24 @@ class RandomBoardGeneratorTest {
         val board = BoardState(targetSize = 24)
         assertTrue(RandomBoardGenerator.plan(board, emptyList(), random = Random(1)).isEmpty())
     }
+
+    @Test
+    fun `spreads reuse evenly across many more characters than distinct photos`() {
+        // Mirrors how BoardRoutes.kt's runOneRandomStep drives this one character at a time,
+        // feeding each planned character's sourcePhotoId back into the board before the next
+        // round — three photos, twelve characters, so each photo should back exactly four.
+        val photos = (1..3).map { photo("p$it", "glasses") }
+        var board = BoardState(targetSize = 12)
+
+        repeat(12) { round ->
+            val plan = RandomBoardGenerator.plan(board, photos, random = Random(round)).first()
+            board = board.copy(
+                characters = board.characters + Character(id = "c$round", traits = plan.traits, sourcePhotoId = plan.photo.id),
+            )
+        }
+
+        val usageCounts = board.characters.groupingBy { it.sourcePhotoId }.eachCount()
+        assertEquals(setOf("p1", "p2", "p3"), usageCounts.keys)
+        assertTrue(usageCounts.values.all { it == 4 })
+    }
 }
