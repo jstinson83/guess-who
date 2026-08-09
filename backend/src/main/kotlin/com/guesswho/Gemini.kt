@@ -71,7 +71,14 @@ suspend fun generatePortrait(
     styleReferenceBytes: ByteArray? = null,
     styleReferenceMime: String? = null,
 ): PortraitResult {
-    val traitsClause = if (traitPhrases.isNotEmpty()) " Give the person these features: ${traitPhrases.joinToString(", ")}." else ""
+    val traitsClause = if (traitPhrases.isNotEmpty()) {
+        " Now caricature these specific features, Guess-Who style: ${traitPhrases.joinToString(", ")}. Push each one " +
+            "well past photographic accuracy until it reads as instantly, unmistakably big/small/prominent at a " +
+            "glance from across a room — a mild, tasteful nod toward the trait is a failed result here. This is the " +
+            "one deliberate exception to 'copy proportions exactly' above: these named features should be visibly, " +
+            "boldly bigger/smaller/more prominent than they are in the source photo. Every other feature not named " +
+            "here keeps its real photographed proportions."
+    } else ""
     val removeClause = if (removeTraitPhrases.isNotEmpty()) {
         " The photo shows ${removeTraitPhrases.joinToString(", ")} — leave that out of the cartoon."
     } else ""
@@ -94,7 +101,10 @@ suspend fun generatePortrait(
         "resize, re-center, or rebalance them toward a symmetric or idealized layout. Never average, " +
         "idealize, beautify, slim, de-age, or generify their features toward a default or template face. " +
         "The specific asymmetries, proportions, and small distinguishing details visible in the photo are " +
-        "exactly what must survive into the cartoon — they are not flaws to smooth away.\n\n" +
+        "exactly what must survive into the cartoon — they are not flaws to smooth away. The one deliberate " +
+        "exception: if specific features are called out later in this prompt for caricature, those named " +
+        "features should be exaggerated well beyond the photo rather than copied exactly — everything else " +
+        "stays faithful to the photo as described above.\n\n" +
         "With that non-negotiable constraint, redraw this photo of a person as a bold, flat-color cartoon " +
         "illustration — a stylized cartoon portrait, not a photorealistic edit. Apply only the linework, " +
         "shading, and color-flattening of the cartoon style; do not let the style reshape the underlying " +
@@ -104,7 +114,10 @@ suspend fun generatePortrait(
         "FINAL REMINDER, most important instruction in this entire prompt: likeness and recognizability of " +
         "the exact person in the first photo always wins over stylization. When cartoon style and faithful " +
         "likeness pull in different directions, keep the person's real, specific features and bend the " +
-        "style to accommodate them — never the other way around."
+        "style to accommodate them — never the other way around. This does not soften the caricature " +
+        "instruction above: any features named for exaggeration must still end up visibly, boldly larger, " +
+        "smaller, or more prominent than in the photo — a person's likeness comes from the whole face, not " +
+        "from keeping one named feature timidly close to its real size."
 
     val parts = buildList {
         add(GeminiPart(text = prompt))
