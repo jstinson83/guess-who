@@ -294,35 +294,34 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// Drives a GENERATING board to completion by calling /random/step in a loop, one character per
-// call — see .claude/context.md's "Client-paced generation" decision for why there's no
-// server-side background job instead. Each call already does real work (a Gemini call), so the
-// await between iterations is enough pacing on the happy path; a transient failure (502, or a
-// network error) backs off briefly before retrying rather than hammering the server. The loop
-// stops on its own — no cancel flag needed — once `currentBoard` no longer points at this board
-// (the user navigated away) or the board leaves GENERATING (done, or a permanent failure).
+// Drives a GENERATING board to completion by polling /random/step on a timer. The endpoint
+// itself never blocks on Gemini — each call either kicks off one character's worth of work on
+// the server's background scope (if nothing's already running there for this board) or finds one
+// already in flight and just returns current state either way — so pacing is our job here, not
+// the server's; the server-side debounce guard means an extra poll or two never costs a wasted
+// Gemini call. The loop stops on its own — no cancel flag needed — once `currentBoard` no longer
+// points at this board (the user navigated away) or the board leaves GENERATING (done, or a
+// permanent failure, both surfaced via `generationError` once that happens).
+const RANDOM_BOARD_POLL_MS = 2000;
+
 async function runRandomBoardSteps(id) {
   if (boardGenLoopId === id) return;
   boardGenLoopId = id;
   try {
     while (currentBoard && currentBoard.id === id && currentBoard.status === 'GENERATING') {
-      let res;
       try {
-        res = await fetch(`/api/boards/${id}/random/step`, { method: 'POST' });
+        const res = await fetch(`/api/boards/${id}/random/step`, { method: 'POST' });
+        if (res.ok) {
+          const board = await res.json();
+          if (currentBoard.id === id) {
+            currentBoard = board;
+            renderBoardDetail();
+          }
+        }
       } catch (err) {
-        await sleep(3000);
-        continue;
+        // Transient network error — just try again next tick.
       }
-
-      if (res.status === 502) {
-        await sleep(3000);
-        continue;
-      }
-
-      const board = await res.json();
-      if (currentBoard.id !== id) break;
-      currentBoard = board;
-      renderBoardDetail();
+      await sleep(RANDOM_BOARD_POLL_MS);
     }
   } finally {
     if (boardGenLoopId === id) boardGenLoopId = null;

@@ -90,9 +90,9 @@ test.describe('board detail generation progress', () => {
       return route.continue();
     });
     await page.route('**/api/boards/rb1/random/step', async (route) => {
-      // A small delay per step (each one is a real Gemini call in production) so the test can
-      // observe the GENERATING state mid-run instead of racing straight past it.
-      await new Promise((resolve) => setTimeout(resolve, 400));
+      // No artificial delay needed here — app.js's poll loop already waits ~2s between calls
+      // (see RANDOM_BOARD_POLL_MS), which is enough for the test to observe the GENERATING
+      // state mid-run instead of racing straight past it.
       stepCount += 1;
       const characters = Array.from({ length: Math.min(stepCount, 3) }, (_, i) => ({
         id: `c${i}`,

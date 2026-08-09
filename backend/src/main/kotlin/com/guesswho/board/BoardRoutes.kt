@@ -21,6 +21,9 @@ import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
+import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -28,11 +31,18 @@ import kotlinx.serialization.json.Json
 // generation isn't bank-aware yet since nothing else in the app is either.
 private const val RANDOM_BOARD_BANK_ID = "default"
 
-// How many candidate photos a single /random/step call will try against Gemini before giving up
-// for that round — bounds one HTTP request's worst-case duration/cost when a photo or two fails,
-// without silently retrying forever inside one request when something's systemically broken (a
-// bad key, Gemini down) — see the BadGateway fallback in /random/step below.
+// How many candidate photos a single background step will try against Gemini before giving up
+// for that round — bounds one step's worst-case duration/cost when a photo or two fails, without
+// silently retrying forever when something's systemically broken (a bad key, Gemini down); the
+// board just stays GENERATING and the next polled step tries again.
 private const val MAX_STEP_ATTEMPTS = 3
+
+// Board ids with a random-generation step currently running on *this* instance — the debounce
+// guard for POST /{id}/random/step: a poll that lands while a step is already in flight just
+// observes current state instead of piling on a second concurrent Gemini call for the same
+// board. Per-instance, not a distributed lock — see the CoroutineScope doc on backgroundScope in
+// Application.kt for why that's an accepted tradeoff rather than a bug.
+private val activeGenerationSteps = ConcurrentHashMap.newKeySet<String>()
 
 @Serializable
 data class CreateBoardRequest(val name: String, val targetSize: Int)
@@ -115,13 +125,16 @@ fun Route.featureRoutes() {
  * [repository]) purely to fetch the style-reference template image for [generatePortrait] —
  * character portraits themselves still go through [repository]. [photoBankRepository] backs the
  * "choose from library" add-character path — see the `/characters` handler below — and the
- * random-board generator (see `/random` and `/random/step` below).
+ * random-board generator (see `/random` and `/random/step` below). [backgroundScope] is the
+ * application-lifetime scope a `/random/step` call launches its actual work on — see the doc on
+ * where it's built in `Application.kt`.
  */
 fun Route.boardRoutes(
     repository: Lazy<BoardRepository>,
     httpClient: HttpClient,
     portraitStore: Lazy<PortraitStore>,
     photoBankRepository: Lazy<PhotoBankRepository>,
+    backgroundScope: CoroutineScope,
 ) {
     route("/api/boards") {
         post {
@@ -241,11 +254,12 @@ fun Route.boardRoutes(
                 }
             }
 
-            // Client-paced unit of work for a board created via POST /random: plans and generates
-            // exactly one more character (trying a couple of candidate photos if the first fails
-            // at Gemini — see MAX_STEP_ATTEMPTS), persists it, and returns the updated board. The
-            // client just calls this in a loop until the response's status leaves GENERATING —
-            // see .claude/context.md for why there's no server-side background job here instead.
+            // The client polls this in a loop (see runRandomBoardSteps in app.js) while a board
+            // is GENERATING. It never blocks on Gemini: if no step is already running for this
+            // board (see activeGenerationSteps), it kicks one off on backgroundScope and returns
+            // immediately either way, so the poll always comes back fast regardless of whether it
+            // started new work or found some already in flight. The client just re-renders
+            // whatever board state comes back and keeps polling until status leaves GENERATING.
             post("/random/step") {
                 val id = call.parameters["id"]!!
                 val board = repository.value.getBoard(id)
@@ -253,68 +267,16 @@ fun Route.boardRoutes(
                     call.respond(HttpStatusCode.NotFound, mapOf("error" to "Board not found"))
                     return@post
                 }
-                if (board.status != BoardStatus.GENERATING) {
-                    // Already finished (or never started) — idempotent no-op so a client that's
-                    // slightly out of sync (two tabs, a resumed page load) just gets current state.
-                    call.respond(board.toDetailDto())
-                    return@post
-                }
-
-                val apiKey = System.getenv("GEMINI_API_KEY")
-                if (apiKey.isNullOrBlank()) {
-                    val stopped = repository.value.stopGenerating(id, "GEMINI_API_KEY is not set on the server")
-                    call.respond(HttpStatusCode.InternalServerError, stopped!!.toDetailDto())
-                    return@post
-                }
-
-                val usedPhotoIds = board.characters.mapNotNull { it.sourcePhotoId }.toSet()
-                val candidatePhotos = photoBankRepository.value.listPhotos(RANDOM_BOARD_BANK_ID).filter { it.id !in usedPhotoIds }
-                val plans = RandomBoardGenerator.plan(board, candidatePhotos).take(MAX_STEP_ATTEMPTS)
-
-                if (plans.isEmpty()) {
-                    val shortfall = board.targetSize - board.characters.size
-                    val error = if (shortfall <= 0) {
-                        null
-                    } else {
-                        "Generated ${board.characters.size} of ${board.targetSize} — ran out of usable library " +
-                            "photos. Add more to the library, or add the rest manually."
-                    }
-                    val stopped = repository.value.stopGenerating(id, error)
-                    call.respond(stopped!!.toDetailDto())
-                    return@post
-                }
-
-                val styleReference = runCatching { portraitStore.value.fetch(STYLE_TEMPLATE_OBJECT_NAME) }.getOrNull()
-                val labelById = DefaultFeaturePool.allFeatures().associateBy { it.id }
-
-                for (plan in plans) {
-                    val image = photoBankRepository.value.getPhotoImage(RANDOM_BOARD_BANK_ID, plan.photo.id) ?: continue
-                    val result = generatePortrait(
-                        httpClient, apiKey, image.bytes, image.contentType,
-                        traitPhrases = plan.traits.mapNotNull { labelById[it]?.label },
-                        removeTraitPhrases = plan.droppedDetectedTraits.mapNotNull { labelById[it]?.label },
-                        styleReferenceBytes = styleReference?.bytes,
-                        styleReferenceMime = styleReference?.contentType,
-                    )
-                    if (result is PortraitResult.Success) {
-                        val portrait = optimizePortrait(result.imageBytes, result.mimeType)
-                        var updated = repository.value.addCharacter(
-                            id, "Character ${board.characters.size + 1}", plan.traits, portrait, plan.photo.id,
-                        )!!
-                        if (updated.characters.size >= updated.targetSize) {
-                            updated = repository.value.stopGenerating(id, null)!!
+                if (board.status == BoardStatus.GENERATING && activeGenerationSteps.add(id)) {
+                    backgroundScope.launch {
+                        try {
+                            runOneRandomStep(id, repository, photoBankRepository, portraitStore, httpClient)
+                        } finally {
+                            activeGenerationSteps.remove(id)
                         }
-                        call.respond(updated.toDetailDto())
-                        return@post
                     }
                 }
-
-                // Every candidate this step tried failed at Gemini (transient outage, bad key,
-                // etc). Leave the board GENERATING — the client's poll loop just tries again —
-                // rather than treating a flaky call as a permanent stop; running out of plannable
-                // photos (above) is the only permanent stop. A distinct status lets the client
-                // tell "still working, had a hiccup" apart from real progress.
-                call.respond(HttpStatusCode.BadGateway, mapOf("error" to "Gemini failed for every photo tried this round — will retry"))
+                call.respond(board.toDetailDto())
             }
 
             post("/complete") {
@@ -497,3 +459,73 @@ private fun BoardState.toDetailDto() = BoardDetailDto(
 )
 
 private fun BoardSummary.toDto() = BoardSummaryDto(id, name, targetSize, characterCount, status.name, updatedAt)
+
+/**
+ * The actual work behind one `/random/step` call, run on [Route.boardRoutes]'s `backgroundScope`
+ * rather than inline in the request handler — see that function's `activeGenerationSteps` guard,
+ * which ensures at most one of these runs per board per instance at a time. Plans and generates
+ * at most one more character (trying a couple of candidate photos if the first fails at Gemini —
+ * see [MAX_STEP_ATTEMPTS]) and persists it. Re-fetches the board itself (rather than taking one
+ * as a parameter) since some time may have passed between the request that kicked this off and
+ * this actually running.
+ */
+private suspend fun runOneRandomStep(
+    boardId: String,
+    repository: Lazy<BoardRepository>,
+    photoBankRepository: Lazy<PhotoBankRepository>,
+    portraitStore: Lazy<PortraitStore>,
+    httpClient: HttpClient,
+) {
+    val board = repository.value.getBoard(boardId) ?: return
+    if (board.status != BoardStatus.GENERATING) return
+
+    val apiKey = System.getenv("GEMINI_API_KEY")
+    if (apiKey.isNullOrBlank()) {
+        repository.value.stopGenerating(boardId, "GEMINI_API_KEY is not set on the server")
+        return
+    }
+
+    val usedPhotoIds = board.characters.mapNotNull { it.sourcePhotoId }.toSet()
+    val candidatePhotos = photoBankRepository.value.listPhotos(RANDOM_BOARD_BANK_ID).filter { it.id !in usedPhotoIds }
+    val plans = RandomBoardGenerator.plan(board, candidatePhotos).take(MAX_STEP_ATTEMPTS)
+
+    if (plans.isEmpty()) {
+        val shortfall = board.targetSize - board.characters.size
+        val error = if (shortfall <= 0) {
+            null
+        } else {
+            "Generated ${board.characters.size} of ${board.targetSize} — ran out of usable library photos. " +
+                "Add more to the library, or add the rest manually."
+        }
+        repository.value.stopGenerating(boardId, error)
+        return
+    }
+
+    val styleReference = runCatching { portraitStore.value.fetch(STYLE_TEMPLATE_OBJECT_NAME) }.getOrNull()
+    val labelById = DefaultFeaturePool.allFeatures().associateBy { it.id }
+
+    for (plan in plans) {
+        val image = photoBankRepository.value.getPhotoImage(RANDOM_BOARD_BANK_ID, plan.photo.id) ?: continue
+        val result = generatePortrait(
+            httpClient, apiKey, image.bytes, image.contentType,
+            traitPhrases = plan.traits.mapNotNull { labelById[it]?.label },
+            removeTraitPhrases = plan.droppedDetectedTraits.mapNotNull { labelById[it]?.label },
+            styleReferenceBytes = styleReference?.bytes,
+            styleReferenceMime = styleReference?.contentType,
+        )
+        if (result is PortraitResult.Success) {
+            val portrait = optimizePortrait(result.imageBytes, result.mimeType)
+            val updated = repository.value.addCharacter(
+                boardId, "Character ${board.characters.size + 1}", plan.traits, portrait, plan.photo.id,
+            ) ?: return
+            if (updated.characters.size >= updated.targetSize) {
+                repository.value.stopGenerating(boardId, null)
+            }
+            return
+        }
+    }
+    // Every candidate this step tried failed at Gemini (transient outage, bad key, etc). Leave
+    // the board GENERATING — the next polled step just tries again — rather than treating a
+    // flaky call as a permanent stop; running out of plannable photos above is the only
+    // permanent one.
+}

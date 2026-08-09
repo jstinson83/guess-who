@@ -222,8 +222,8 @@ precisely, and what bit us before."
   photo bank without picking photos/traits one at a time. `POST /random` just creates the board in
   a new `GENERATING` status and returns immediately; the *client* then drives progress by calling
   `POST /{id}/random/step` in a loop, once per character, until the board leaves `GENERATING` —
-  deliberately not a server-side background job (see the "Client-paced generation" decision
-  below). `board/RandomBoardGenerator.kt` (pure, unit-tested like `BoardBalancer`) plans each
+  a debounced background step per poll rather than one big job — see the "Debounced background
+  steps" decision below. `board/RandomBoardGenerator.kt` (pure, unit-tested like `BoardBalancer`) plans each
   character: start from the bank photo's own `detectedFeatures` (real likeness), keep only the
   ones `BoardBalancer.availableFeatures` still allows for the board, then pad up to a randomly
   sized 5–8 trait set from other currently-available features (sampled from the top few by
@@ -272,19 +272,32 @@ precisely, and what bit us before."
   Don't reintroduce a bare category field expecting it to matter; if
   category-driven behavior is wanted later (e.g. a different feature pool
   per category), that's new design work, not a restoration.
-- **Client-paced generation over a server-side background job**: random board generation (see
-  "Major features" above) needs many sequential Gemini calls, which was initially built as a
-  detached background coroutine kicked off by `POST /api/boards/random`. Reconsidered before
-  shipping: Cloud Run freezes an instance's CPU when it has no request in flight by default, which
-  would silently stall a detached coroutine between requests in production unless the deploy also
-  added `--no-cpu-throttling` — extra deploy-config surface for a problem that has a simpler fix.
-  Instead, all the work happens inside normal request/response cycles: `POST /random` just creates
-  the board and returns, and the client calls `POST /{id}/random/step` in a loop, one character
-  per call, until done. No background job, no CoroutineScope threaded through `boardRoutes`, no
-  Cloud Run flag — and it's Cloud Run-safe by construction rather than by extra configuration. The
-  tradeoff: generation only progresses while a client is actively calling `step` (closing the tab
-  mid-run just pauses it — reopening the board detail page and it resumes, since progress is
-  itself the persisted character count, not separate job state).
+- **Debounced background steps, not one big job, and not a blocking request per character**:
+  random board generation (see "Major features" above) needs many sequential Gemini calls, and
+  went through two earlier shapes before landing here. First cut: one detached background
+  coroutine kicked off by `POST /api/boards/random` that ran the whole fill unattended.
+  Reconsidered before shipping — Cloud Run freezes an instance's CPU when it has no request in
+  flight by default, which would silently stall a long-lived detached job between requests in
+  production unless the deploy also added `--no-cpu-throttling`. Second cut: no background work
+  at all — `POST /{id}/random/step` did one character's plan-and-Gemini-call synchronously inline
+  and the client awaited it in a loop, one blocking HTTP round-trip per character. That sidestepped
+  the CPU-throttling problem but tied up a connection for the duration of every Gemini call.
+  Landed on a middle ground: `POST /{id}/random/step` never blocks — it kicks one character's
+  worth of work onto `backgroundScope` (an application-lifetime `CoroutineScope` built in
+  `Application.kt`, cancelled on `ApplicationStopping`) only if nothing's already running for that
+  board on this instance (a `ConcurrentHashMap.newKeySet<String>()` debounce guard,
+  `activeGenerationSteps` in `BoardRoutes.kt`), and returns current state immediately either way.
+  The client (`runRandomBoardSteps` in `app.js`) just polls that endpoint on a timer
+  (`RANDOM_BOARD_POLL_MS`, 2s) and re-renders whatever comes back.
+  Deliberately shipped **without** `--no-cpu-throttling`: a step can still get CPU-throttled
+  mid-Gemini-call if its instance goes idle, but the design self-heals rather than needing that
+  flag for correctness — the debounce guard is per-instance state, not a distributed lock, so a
+  poll that lands on a *different* (fresh) instance just sees "nothing running here" and starts
+  its own step, and a poll that lands back on the *same* frozen instance restores its CPU
+  allocation and lets the stalled step resume. Worst case is a temporarily slower-looking board,
+  not a stuck one. Revisit adding the flag if that turns out to matter in practice. Same
+  resumability property as before either way: progress is the persisted character count, not
+  separate job state, so closing the tab mid-run just pauses it and reopening the board resumes.
 
 ## Maintenance
 

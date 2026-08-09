@@ -24,6 +24,9 @@ import io.ktor.server.testing.testApplication
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -43,13 +46,26 @@ class BoardRoutesTest {
 
     private fun photoBankRepository() = lazy { InMemoryPhotoBankRepository() as PhotoBankRepository }
 
+    // Unconfined so a /random/step call's backgroundScope.launch{} runs to completion inline,
+    // before the launching request handler even returns — the in-memory test doubles never
+    // genuinely suspend, so there's no real concurrency to lose by doing this. Lets tests assert
+    // on the outcome with a follow-up GET instead of needing to sleep/poll for a real background
+    // job to finish.
+    private fun backgroundScope() = CoroutineScope(Dispatchers.Unconfined + SupervisorJob())
+
     private fun io.ktor.server.application.Application.installBoardRoutes(
         repo: Lazy<BoardRepository> = repository(),
         photoBankRepo: Lazy<PhotoBankRepository> = photoBankRepository(),
     ): Lazy<BoardRepository> {
         install(ContentNegotiation) { json() }
         routing {
-            boardRoutes(repo, HttpClient(CIO) { install(ClientContentNegotiation) { json() } }, portraitStore(), photoBankRepo)
+            boardRoutes(
+                repo,
+                HttpClient(CIO) { install(ClientContentNegotiation) { json() } },
+                portraitStore(),
+                photoBankRepo,
+                backgroundScope(),
+            )
         }
         return repo
     }
@@ -127,18 +143,50 @@ class BoardRoutesTest {
     }
 
     @Test
-    fun `random step without a GEMINI_API_KEY stops generating and reports the error`() = testApplication {
+    fun `random step kicks off background work and returns immediately without waiting for it`() = testApplication {
         val repo = repository()
         application { installBoardRoutes(repo) }
 
         val board = runBlocking { repo.value.createBoard("The Smiths", 12) }
         runBlocking { repo.value.startGenerating(board.id) }
 
+        // The kicked-off step runs on an Unconfined test scope (see backgroundScope()), so by
+        // the time this call returns it has already run to completion and flipped the board back
+        // to IN_PROGRESS with a GEMINI_API_KEY error — but the *response body itself* is still
+        // the pre-step snapshot (still GENERATING), proving the route doesn't wait on it.
         val response = client.post("/api/boards/${board.id}/random/step")
-        assertEquals(HttpStatusCode.InternalServerError, response.status)
+        assertEquals(HttpStatusCode.OK, response.status)
         val body = Json.parseToJsonElement(response.bodyAsText()).jsonObject
-        assertEquals("IN_PROGRESS", body.getValue("status").jsonPrimitive.content)
-        assertTrue(body.getValue("generationError").jsonPrimitive.content.contains("GEMINI_API_KEY"))
+        assertEquals("GENERATING", body.getValue("status").jsonPrimitive.content)
+
+        val after = client.get("/api/boards/${board.id}")
+        val afterBody = Json.parseToJsonElement(after.bodyAsText()).jsonObject
+        assertEquals("IN_PROGRESS", afterBody.getValue("status").jsonPrimitive.content)
+        assertTrue(afterBody.getValue("generationError").jsonPrimitive.content.contains("GEMINI_API_KEY"))
+    }
+
+    @Test
+    fun `the debounce guard releases after a step finishes, so a later call still works`() = testApplication {
+        val repo = repository()
+        application { installBoardRoutes(repo) }
+
+        val board = runBlocking { repo.value.createBoard("The Smiths", 12) }
+        runBlocking { repo.value.startGenerating(board.id) }
+
+        // Unconfined test scheduling (see backgroundScope()) makes these calls run serially
+        // rather than actually racing, so this doesn't exercise the guard's concurrent-skip path
+        // directly — it instead proves activeGenerationSteps' finally-block release works: if it
+        // didn't, this board id would stay wedged in the set forever and no future step (e.g. a
+        // second random board reusing Firestore-assigned ids in a real deployment) could ever run
+        // for it again. Both calls should complete cleanly with no error.
+        val first = client.post("/api/boards/${board.id}/random/step")
+        val second = client.post("/api/boards/${board.id}/random/step")
+        assertEquals(HttpStatusCode.OK, first.status)
+        assertEquals(HttpStatusCode.OK, second.status)
+
+        val after = client.get("/api/boards/${board.id}")
+        val afterBody = Json.parseToJsonElement(after.bodyAsText()).jsonObject
+        assertEquals("IN_PROGRESS", afterBody.getValue("status").jsonPrimitive.content)
     }
 
     @Test
