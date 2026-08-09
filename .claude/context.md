@@ -212,6 +212,20 @@ precisely, and what bit us before."
   character can have neither). The card grid and trait-ask grid also got a
   `max-width: 480px` tuning pass (`styles.css`) — smaller card tiles (3 columns
   on a ~390px phone instead of 2) and a single-column trait-ask list.
+  Categories now cover the *whole* pool (not just the four exclusive pairs) —
+  `DefaultFeaturePool` groups everything into Accessories, Hair, Facial
+  features, Skin tone, and Age, so a full board's trait-ask list is 5 buttons
+  instead of 22. The category button summary is a compact "n/total asked"
+  count rather than spelling out every option's answer, since groups can now
+  hold more than two options. **The main play-screen grid (`#playGrid`) hides
+  character names entirely** (`gameCardHtml`'s `showName` param, defaulting to
+  `true` everywhere else — pick/guess/game-over screens keep names since
+  they're already click-to-choose/reveal) to read more like a physical board;
+  tapping any card, including a face-down/eliminated one, opens
+  `gameCardDetailModalHtml` with that character's name and full trait list via
+  `showGameCardDetail`. Not a fairness leak — every character's
+  appearance/traits are already visible to both players, only the two secret
+  picks are hidden.
 - **Photo Library** (`photobank/`, `#/library` in the frontend): a
   board-agnostic library of real people's own photos plus their detected
   features, independent of any board — built for reuse across boards'
