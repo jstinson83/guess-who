@@ -30,4 +30,14 @@ interface BoardRepository {
     suspend fun getCharacterPortrait(boardId: String, characterId: String): StoredPortrait?
 
     suspend fun completeBoard(id: String): BoardState?
+
+    /** Marks a freshly-created board as mid random-fill (see [BoardStatus.GENERATING]) — called
+     * once, right before the background job in `POST /api/boards/random` starts adding
+     * characters. */
+    suspend fun startGenerating(id: String): BoardState?
+
+    /** Flips a [BoardStatus.GENERATING] board back to [BoardStatus.IN_PROGRESS] once the
+     * background job stops, whether it filled the board completely ([error] null) or not
+     * (e.g. the photo library ran out of usable photos, or a Gemini call failed). */
+    suspend fun stopGenerating(id: String, error: String?): BoardState?
 }

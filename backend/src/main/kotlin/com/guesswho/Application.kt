@@ -21,6 +21,7 @@ import io.ktor.http.content.forEachPart
 import io.ktor.http.content.streamProvider
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
+import io.ktor.server.application.ApplicationStopping
 import io.ktor.server.application.call
 import io.ktor.server.application.install
 import io.ktor.server.engine.embeddedServer
@@ -34,6 +35,10 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 import java.util.Base64
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.serialization.json.Json
 
 // Must already exist (Firestore doesn't auto-create named databases) — see README's one-time
@@ -105,6 +110,19 @@ fun Application.module() {
         FirestorePhotoBankRepository(firestore.value, portraitStore.value)
     }
 
+    // Outlives any single request — a random-board generation step (see POST
+    // /api/boards/{id}/random/step in BoardRoutes.kt) is kicked off from a request but allowed
+    // to keep running after that request's response is sent, so the client doesn't have to hold
+    // a connection open for the duration of a Gemini call. Cancelled on shutdown so Netty isn't
+    // waiting on orphaned jobs. Deliberately not paired with Cloud Run's `--no-cpu-throttling`
+    // flag yet (see .claude/context.md's "Client-paced generation" note) — a step can stall if
+    // its instance gets CPU-throttled mid-call, but the design self-heals (a later poll either
+    // wakes the same instance or lands on a fresh one that picks the board back up from its
+    // persisted state) rather than depending on that flag for correctness. Revisit if stalls
+    // turn out to be a real problem in practice.
+    val backgroundScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    environment.monitor.subscribe(ApplicationStopping) { backgroundScope.cancel() }
+
     routing {
         staticResources("/", "static", index = "index.html")
 
@@ -156,7 +174,7 @@ fun Application.module() {
             }
         }
 
-        boardRoutes(boardRepository, httpClient, portraitStore, photoBankRepository)
+        boardRoutes(boardRepository, httpClient, portraitStore, photoBankRepository, backgroundScope)
         photoBankRoutes(photoBankRepository, httpClient)
         featureRoutes()
     }

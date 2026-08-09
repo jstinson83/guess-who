@@ -12,11 +12,13 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+const BOARD_STATUS_LABELS = { COMPLETE: 'Complete', GENERATING: 'Generating…', IN_PROGRESS: 'In progress' };
+
 function boardCardHtml(board) {
   return `
     <div class="board-card-name">${escapeHtml(board.name)}</div>
     <div class="board-card-meta">${board.characterCount}/${board.targetSize} characters</div>
-    <span class="badge badge-${board.status.toLowerCase()}">${board.status === 'COMPLETE' ? 'Complete' : 'In progress'}</span>
+    <span class="badge badge-${board.status.toLowerCase()}">${BOARD_STATUS_LABELS[board.status] || board.status}</span>
   `;
 }
 

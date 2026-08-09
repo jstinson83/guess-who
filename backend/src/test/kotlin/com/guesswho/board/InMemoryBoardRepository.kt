@@ -62,4 +62,18 @@ class InMemoryBoardRepository : BoardRepository {
         boards[id] = updated
         return updated
     }
+
+    override suspend fun startGenerating(id: String): BoardState? {
+        val board = boards[id] ?: return null
+        val updated = board.copy(status = BoardStatus.GENERATING, generationError = null, updatedAt = Instant.now().toString())
+        boards[id] = updated
+        return updated
+    }
+
+    override suspend fun stopGenerating(id: String, error: String?): BoardState? {
+        val board = boards[id] ?: return null
+        val updated = board.copy(status = BoardStatus.IN_PROGRESS, generationError = error, updatedAt = Instant.now().toString())
+        boards[id] = updated
+        return updated
+    }
 }

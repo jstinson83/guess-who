@@ -24,8 +24,18 @@ const libraryFabUpload = document.getElementById('libraryFabUpload');
 const libraryCameraInput = document.getElementById('libraryCameraInput');
 const libraryUploadInput = document.getElementById('libraryUploadInput');
 
+const generateRandomBoardBtn = document.getElementById('generateRandomBoardBtn');
+const randomBoardModal = document.getElementById('randomBoardModal');
+const randomBoardNameInput = document.getElementById('randomBoardName');
+const randomBoardTargetSizeInput = document.getElementById('randomBoardTargetSize');
+const randomBoardStatusEl = document.getElementById('randomBoardStatus');
+const randomBoardGenerateBtn = document.getElementById('randomBoardGenerateBtn');
+const randomBoardCancelBtn = document.getElementById('randomBoardCancelBtn');
+
 const boardNameEl = document.getElementById('boardName');
 const boardMetaEl = document.getElementById('boardMeta');
+const boardGeneratingBanner = document.getElementById('boardGeneratingBanner');
+const boardGenerationNoticeEl = document.getElementById('boardGenerationNotice');
 const characterGrid = document.getElementById('characterGrid');
 const traitsEl = document.getElementById('traits');
 
@@ -98,6 +108,12 @@ let pendingBankPhoto = null;
 let libraryPhotos = [];
 let libraryFeatureLabels = null;
 
+// Id of the board a random-generation step loop (see runRandomBoardSteps) is currently driving,
+// or null if none is running. Guards against starting a second loop for the same board (e.g.
+// showBoardDetail firing twice); the loop itself stops on its own once `currentBoard` no longer
+// points at this board (navigated away) or leaves GENERATING, so there's no separate cancel flag.
+let boardGenLoopId = null;
+
 // --- Routing: '#/board/<id>' shows the detail view, '.../crop' and '.../features' are the
 // add-a-character wizard steps, anything else shows the board list. ---
 
@@ -109,6 +125,7 @@ function showOnly(view) {
 
 async function route() {
   characterModal.classList.add('hidden');
+  randomBoardModal.classList.add('hidden');
 
   const pickPhotoMatch = location.hash.match(/^#\/board\/([^/]+)\/pick-photo$/);
   const cropMatch = location.hash.match(/^#\/board\/([^/]+)\/crop$/);
@@ -233,6 +250,7 @@ async function showBoardDetail(id) {
     if (!res.ok) throw new Error(board.error || 'Board not found');
     currentBoard = board;
     renderBoardDetail();
+    if (board.status === 'GENERATING') runRandomBoardSteps(id);
   } catch (err) {
     boardNameEl.textContent = 'Board not found';
     boardMetaEl.textContent = err.message;
@@ -241,13 +259,23 @@ async function showBoardDetail(id) {
 
 function renderBoardDetail() {
   const board = currentBoard;
+  const isGenerating = board.status === 'GENERATING';
+  const isComplete = board.status === 'COMPLETE';
+
   boardNameEl.textContent = board.name;
-  boardMetaEl.textContent = `${board.characters.length}/${board.targetSize} characters · ${board.status === 'COMPLETE' ? 'Complete' : 'In progress'}`;
+  boardMetaEl.textContent = `${board.characters.length}/${board.targetSize} characters · ${isComplete ? 'Complete' : isGenerating ? 'Generating…' : 'In progress'}`;
+
+  boardGeneratingBanner.classList.toggle('hidden', !isGenerating);
+  if (isGenerating) {
+    boardGeneratingBanner.textContent = `🎲 Generating characters — ${board.characters.length}/${board.targetSize} so far. Keep this tab open to keep it moving; reopening the board later picks up where it left off.`;
+  }
+
+  boardGenerationNoticeEl.classList.toggle('hidden', !board.generationError);
+  boardGenerationNoticeEl.textContent = board.generationError || '';
 
   const hasEnoughCharacters = board.characters.length >= board.targetSize;
-  const isComplete = board.status === 'COMPLETE';
   const completeBtn = document.getElementById('completeBoardBtn');
-  completeBtn.classList.toggle('hidden', isComplete);
+  completeBtn.classList.toggle('hidden', isComplete || isGenerating);
   completeBtn.disabled = !hasEnoughCharacters;
   completeBtn.title = hasEnoughCharacters
     ? ''
@@ -256,10 +284,48 @@ function renderBoardDetail() {
   playBoardBtn.classList.toggle('hidden', !isComplete);
   playBoardBtn.href = `#/board/${board.id}/play`;
 
-  fabContainer.classList.toggle('hidden', isComplete);
+  fabContainer.classList.toggle('hidden', isComplete || isGenerating);
 
   renderCharacterGrid();
   renderFeatureBalance();
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Drives a GENERATING board to completion by polling /random/step on a timer. The endpoint
+// itself never blocks on Gemini — each call either kicks off one character's worth of work on
+// the server's background scope (if nothing's already running there for this board) or finds one
+// already in flight and just returns current state either way — so pacing is our job here, not
+// the server's; the server-side debounce guard means an extra poll or two never costs a wasted
+// Gemini call. The loop stops on its own — no cancel flag needed — once `currentBoard` no longer
+// points at this board (the user navigated away) or the board leaves GENERATING (done, or a
+// permanent failure, both surfaced via `generationError` once that happens).
+const RANDOM_BOARD_POLL_MS = 2000;
+
+async function runRandomBoardSteps(id) {
+  if (boardGenLoopId === id) return;
+  boardGenLoopId = id;
+  try {
+    while (currentBoard && currentBoard.id === id && currentBoard.status === 'GENERATING') {
+      try {
+        const res = await fetch(`/api/boards/${id}/random/step`, { method: 'POST' });
+        if (res.ok) {
+          const board = await res.json();
+          if (currentBoard.id === id) {
+            currentBoard = board;
+            renderBoardDetail();
+          }
+        }
+      } catch (err) {
+        // Transient network error — just try again next tick.
+      }
+      await sleep(RANDOM_BOARD_POLL_MS);
+    }
+  } finally {
+    if (boardGenLoopId === id) boardGenLoopId = null;
+  }
 }
 
 // Read-only per-feature counts/targets for the whole board — the same [FeatureStatusDto]
@@ -1000,6 +1066,62 @@ function dismissCharacterModal() {
 characterModalDismissBtn.addEventListener('click', dismissCharacterModal);
 characterModal.addEventListener('click', (e) => {
   if (e.target === characterModal) dismissCharacterModal();
+});
+
+// --- Generate-random-board modal: launched from the Photo Library screen. Submitting kicks off
+// the board (POST /api/boards/random) and navigates straight to its detail page — the step loop
+// that actually fills it in (see runRandomBoardSteps) starts there once showBoardDetail sees the
+// board come back in GENERATING status. ---
+
+function showRandomBoardModal() {
+  randomBoardNameInput.value = '';
+  randomBoardTargetSizeInput.value = '24';
+  randomBoardStatusEl.textContent = '';
+  randomBoardStatusEl.className = 'status';
+  randomBoardModal.classList.remove('hidden');
+}
+
+function dismissRandomBoardModal() {
+  randomBoardModal.classList.add('hidden');
+}
+
+generateRandomBoardBtn.addEventListener('click', showRandomBoardModal);
+randomBoardCancelBtn.addEventListener('click', dismissRandomBoardModal);
+randomBoardModal.addEventListener('click', (e) => {
+  if (e.target === randomBoardModal) dismissRandomBoardModal();
+});
+
+randomBoardGenerateBtn.addEventListener('click', async () => {
+  const name = randomBoardNameInput.value.trim();
+  const targetSize = parseInt(randomBoardTargetSizeInput.value, 10);
+
+  if (!name) {
+    randomBoardStatusEl.textContent = 'Give the board a name first.';
+    randomBoardStatusEl.className = 'status error';
+    return;
+  }
+
+  randomBoardStatusEl.textContent = 'Starting…';
+  randomBoardStatusEl.className = 'status';
+  randomBoardGenerateBtn.disabled = true;
+
+  try {
+    const res = await fetch('/api/boards/random', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, targetSize }),
+    });
+    const board = await res.json();
+    if (!res.ok) throw new Error(board.error || 'Failed to start random board generation');
+
+    dismissRandomBoardModal();
+    location.hash = `#/board/${board.id}`;
+  } catch (err) {
+    randomBoardStatusEl.textContent = err.message;
+    randomBoardStatusEl.className = 'status error';
+  } finally {
+    randomBoardGenerateBtn.disabled = false;
+  }
 });
 
 // --- Photo Library: board-agnostic photo grid, standalone from any board. ---

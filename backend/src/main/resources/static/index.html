@@ -44,6 +44,9 @@
         </div>
       </div>
 
+      <div id="boardGeneratingBanner" class="board-generating-banner hidden"></div>
+      <div id="boardGenerationNotice" class="status warning hidden"></div>
+
       <div class="panel character-panel">
         <div id="characterGrid" class="character-grid"></div>
       </div>
@@ -150,6 +153,8 @@
       <h1>Photo Library</h1>
       <p class="subtitle">A reusable library of photos, independent of any board.</p>
 
+      <button id="generateRandomBoardBtn">🎲 Generate a random board</button>
+
       <div class="panel photobank-panel" id="photoBankPanel">
         <div id="photoBankOverlay" class="panel-overlay hidden">
           <div class="spinner"></div>
@@ -187,6 +192,23 @@
       <div id="characterModalSubtitle" class="modal-subtitle"></div>
       <button id="characterModalDismissBtn">Done</button>
       <button id="characterModalDeleteBtn" class="link-btn modal-delete-btn hidden">Delete this photo</button>
+    </div>
+  </div>
+
+  <!-- Generate-random-board modal: launched from the Photo Library screen's FAB-adjacent
+       button. Picks photos from the library at random and fills in the rest of each
+       character's features itself — see app.js's randomBoardGenerateBtn handler. -->
+  <div id="randomBoardModal" class="modal-overlay hidden">
+    <div class="modal">
+      <h2>Generate a random board</h2>
+      <p class="modal-description">Picks photos from the library at random, keeps what each one really shows where the board has room, then fills in the rest.</p>
+      <label class="field-label" for="randomBoardName">Board name</label>
+      <input type="text" id="randomBoardName" placeholder="Board name (e.g. The Smiths)" />
+      <label class="field-label" for="randomBoardTargetSize">Target size</label>
+      <input type="number" id="randomBoardTargetSize" value="24" min="2" max="64" />
+      <div id="randomBoardStatus" class="status"></div>
+      <button id="randomBoardGenerateBtn">Generate</button>
+      <button class="link-btn" id="randomBoardCancelBtn">Cancel</button>
     </div>
   </div>
 

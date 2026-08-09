@@ -216,6 +216,25 @@ precisely, and what bit us before."
   created `Character`. That's a one-way, point-in-time copy: deleting a bank
   photo later never cascades to characters already created from it, since
   each character already holds its own independent portrait + traits.
+- **Random board generation** (`POST /api/boards/random`, `POST /api/boards/{id}/random/step` in
+  `board/BoardRoutes.kt`; entry point is a "🎲 Generate random board" button on the Photo Library
+  screen — a few clicks from there, not from the board list): fills a whole new board from the
+  photo bank without picking photos/traits one at a time. `POST /random` just creates the board in
+  a new `GENERATING` status and returns immediately; the *client* then drives progress by calling
+  `POST /{id}/random/step` in a loop, once per character, until the board leaves `GENERATING` —
+  a debounced background step per poll rather than one big job — see the "Debounced background
+  steps" decision below. `board/RandomBoardGenerator.kt` (pure, unit-tested like `BoardBalancer`) plans each
+  character: start from the bank photo's own `detectedFeatures` (real likeness), keep only the
+  ones `BoardBalancer.availableFeatures` still allows for the board, then pad up to a randomly
+  sized 5–8 trait set from other currently-available features (sampled from the top few by
+  balance score, not strictly greedy) so it doesn't read as mechanically identical every time —
+  "prioritize likeness, then go wild." A detected trait dropped for being unavailable is passed to
+  `generatePortrait` as a `removeTraitPhrases` entry, same diff the manual add-character flow
+  already sends. Characters are auto-named `"Character 1"`, `"Character 2"`, etc. — no real name
+  data exists for a bank photo. `BoardState.generationError` is set (board flips back to
+  `IN_PROGRESS` either way) when a run can't fully reach target size, e.g. the library runs out of
+  usable photos; the manual add-character and complete-board routes both reject a `GENERATING`
+  board with 409 so nothing else mutates it mid-run.
 - No board-quality analysis yet; game generation so far is pass-and-play
   only (saving/editing generated games not started) — see `current.md`.
 
@@ -253,6 +272,32 @@ precisely, and what bit us before."
   Don't reintroduce a bare category field expecting it to matter; if
   category-driven behavior is wanted later (e.g. a different feature pool
   per category), that's new design work, not a restoration.
+- **Debounced background steps, not one big job, and not a blocking request per character**:
+  random board generation (see "Major features" above) needs many sequential Gemini calls, and
+  went through two earlier shapes before landing here. First cut: one detached background
+  coroutine kicked off by `POST /api/boards/random` that ran the whole fill unattended.
+  Reconsidered before shipping — Cloud Run freezes an instance's CPU when it has no request in
+  flight by default, which would silently stall a long-lived detached job between requests in
+  production unless the deploy also added `--no-cpu-throttling`. Second cut: no background work
+  at all — `POST /{id}/random/step` did one character's plan-and-Gemini-call synchronously inline
+  and the client awaited it in a loop, one blocking HTTP round-trip per character. That sidestepped
+  the CPU-throttling problem but tied up a connection for the duration of every Gemini call.
+  Landed on a middle ground: `POST /{id}/random/step` never blocks — it kicks one character's
+  worth of work onto `backgroundScope` (an application-lifetime `CoroutineScope` built in
+  `Application.kt`, cancelled on `ApplicationStopping`) only if nothing's already running for that
+  board on this instance (a `ConcurrentHashMap.newKeySet<String>()` debounce guard,
+  `activeGenerationSteps` in `BoardRoutes.kt`), and returns current state immediately either way.
+  The client (`runRandomBoardSteps` in `app.js`) just polls that endpoint on a timer
+  (`RANDOM_BOARD_POLL_MS`, 2s) and re-renders whatever comes back.
+  Deliberately shipped **without** `--no-cpu-throttling`: a step can still get CPU-throttled
+  mid-Gemini-call if its instance goes idle, but the design self-heals rather than needing that
+  flag for correctness — the debounce guard is per-instance state, not a distributed lock, so a
+  poll that lands on a *different* (fresh) instance just sees "nothing running here" and starts
+  its own step, and a poll that lands back on the *same* frozen instance restores its CPU
+  allocation and lets the stalled step resume. Worst case is a temporarily slower-looking board,
+  not a stuck one. Revisit adding the flag if that turns out to matter in practice. Same
+  resumability property as before either way: progress is the persisted character count, not
+  separate job state, so closing the tab mid-run just pauses it and reopening the board resumes.
 
 ## Maintenance
 
