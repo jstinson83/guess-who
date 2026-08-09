@@ -185,6 +185,49 @@ test.describe('game screens', () => {
     expect(no).toContain('No');
   });
 
+  test('traitGroupButtonHtml prompts to choose when no option in the group is asked yet', async ({ page }) => {
+    const html = await page.evaluate(() =>
+      traitGroupButtonHtml({
+        label: 'Hair color',
+        options: [{ id: 'hair_light', label: 'Light hair' }, { id: 'hair_dark', label: 'Dark hair' }],
+        myAnswers: {},
+      })
+    );
+    expect(html).toContain('Hair color');
+    expect(html).toContain('Choose');
+    expect(html).not.toContain('trait-ask-answer');
+  });
+
+  test('traitGroupButtonHtml summarizes answered options within the group', async ({ page }) => {
+    const html = await page.evaluate(() =>
+      traitGroupButtonHtml({
+        label: 'Hair color',
+        options: [{ id: 'hair_light', label: 'Light hair' }, { id: 'hair_dark', label: 'Dark hair' }],
+        myAnswers: { hair_light: false },
+      })
+    );
+    expect(html).toContain('Light hair');
+    expect(html).toContain('trait-ask-answer-no');
+    expect(html).toContain('No');
+    expect(html).not.toContain('Dark hair:');
+  });
+
+  test('traitGroupModalHtml renders one button per option, disabling already-asked ones', async ({ page }) => {
+    const html = await page.evaluate(() =>
+      traitGroupModalHtml({
+        label: 'Hair color',
+        options: [{ id: 'hair_light', label: 'Light hair' }, { id: 'hair_dark', label: 'Dark hair' }],
+        myAnswers: { hair_light: true },
+      })
+    );
+    expect(html).toContain('Hair color');
+    expect(html).toContain('data-id="hair_light"');
+    expect(html).toContain('data-id="hair_dark"');
+    expect(html).toMatch(/data-id="hair_light" disabled/);
+    expect(html).not.toMatch(/data-id="hair_dark" disabled/);
+    expect(html).toContain('id="cancelTraitGroupBtn"');
+  });
+
   test('guessPickerHtml renders the confirm/cancel affordances', async ({ page }) => {
     const html = await page.evaluate(() => guessPickerHtml());
     expect(html).toContain('id="guessGrid"');

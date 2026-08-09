@@ -195,6 +195,23 @@ precisely, and what bit us before."
   mid-game loses progress, accepted for a same-room, same-sitting MVP —
   deliberately not the same problem as the parked "async two-device play"
   idea in `current.md`, which is about reconnecting across devices/time.
+  **Mobile-friendly trait-ask grid**: `FeatureDef` gained an optional `groupLabel`
+  (`board/BoardModel.kt`), set on `DefaultFeaturePool`'s four `exclusiveWith` pairs
+  (hair_light/hair_dark → "Hair color", eyes_big/eyes_small → "Eye size",
+  skin_light/skin_dark → "Skin tone", young/old → "Age") and threaded through
+  `FeatureStatusDto`. The play screen's trait-ask grid (`renderPlayScreen` in
+  `app.js`) collapses same-`groupLabel` features into one category button
+  (`traitGroupButtonHtml`/`.trait-group-btn`) that opens a small option-picker
+  modal (`traitGroupModalHtml`, `showTraitGroupModal`) instead of listing every
+  option flat — cuts a 22-feature board down to 18 tappable rows and keeps each
+  option's individual ask/answer state exactly like a standalone trait button
+  (disabled once asked; the whole category disables once every option in it has
+  been asked, or once the turn's single action is used). Purely a UI grouping —
+  doesn't change balancing, detection, or the underlying one-trait-per-ask
+  semantics (asking one option in a pair doesn't auto-answer the other, since a
+  character can have neither). The card grid and trait-ask grid also got a
+  `max-width: 480px` tuning pass (`styles.css`) — smaller card tiles (3 columns
+  on a ~390px phone instead of 2) and a single-column trait-ask list.
 - **Photo Library** (`photobank/`, `#/library` in the frontend): a
   board-agnostic library of real people's own photos plus their detected
   features, independent of any board — built for reuse across boards'

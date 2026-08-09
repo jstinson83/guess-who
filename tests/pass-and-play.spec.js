@@ -45,8 +45,8 @@ async function pickSecret(page, characterId) {
 }
 
 /** Runs setup end to end: Player 1 secretly picks p1Id, Player 2 secretly picks p2Id. */
-async function completeSetup(page, p1Id, p2Id) {
-  await page.goto('/#/board/test-board');
+async function completeSetup(page, p1Id, p2Id, boardId = 'test-board') {
+  await page.goto(`/#/board/${boardId}`);
   await page.click('#playBoardBtn');
   await expect(page.locator('#gameContent h1')).toHaveText('Player 1: pick your character');
 
@@ -78,6 +78,80 @@ test.describe('setup', () => {
     await expect(page.locator('#confirmPickBtn')).toBeDisabled();
     await page.click('#pickGrid .game-card[data-id="alice"]');
     await expect(page.locator('#confirmPickBtn')).toBeEnabled();
+  });
+});
+
+test.describe('grouped trait categories', () => {
+  const groupedBoard = {
+    ...board,
+    id: 'grouped-board',
+    characters: [
+      { id: 'alice', name: 'Alice', traits: ['hair_light'], portraitUrl: PIXEL },
+      { id: 'bob', name: 'Bob', traits: ['hair_dark'], portraitUrl: PIXEL },
+    ],
+    featureStatuses: [
+      { id: 'glasses', label: 'Glasses', currentYes: 1, currentNo: 1, targetYesMin: 0, targetYesMax: 2, state: 'ON_TARGET' },
+      {
+        id: 'hair_light',
+        label: 'Light hair',
+        currentYes: 1,
+        currentNo: 1,
+        targetYesMin: 0,
+        targetYesMax: 2,
+        state: 'ON_TARGET',
+        groupLabel: 'Hair color',
+      },
+      {
+        id: 'hair_dark',
+        label: 'Dark hair',
+        currentYes: 1,
+        currentNo: 1,
+        targetYesMin: 0,
+        targetYesMax: 2,
+        state: 'ON_TARGET',
+        groupLabel: 'Hair color',
+      },
+    ],
+  };
+
+  test.beforeEach(async ({ page }) => {
+    await page.route('**/api/boards/grouped-board', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(groupedBoard) })
+    );
+  });
+
+  test('a paired feature collapses into one category button that opens an option picker', async ({ page }) => {
+    await completeSetup(page, 'alice', 'bob', 'grouped-board');
+
+    // Two mutually-exclusive features collapse into a single "Hair color" button,
+    // not two separate flat trait buttons.
+    await expect(page.locator('#traitAskGrid .trait-group-btn')).toHaveCount(1);
+    await expect(page.locator('#traitAskGrid .trait-group-btn')).toHaveText(/Hair color/);
+    await expect(page.locator('#traitAskGrid .trait-ask-btn[data-id="hair_light"]')).toHaveCount(0);
+
+    await page.click('#traitAskGrid .trait-group-btn');
+    await expect(page.locator('.trait-group-modal')).toBeVisible();
+    await expect(page.locator('.trait-group-modal .trait-ask-btn[data-id="hair_light"]')).toBeVisible();
+    await expect(page.locator('.trait-group-modal .trait-ask-btn[data-id="hair_dark"]')).toBeVisible();
+
+    // Bob (Player 2's secret) has dark hair, so asking "Light hair?" answers No.
+    await page.click('.trait-group-modal .trait-ask-btn[data-id="hair_light"]');
+    await expect(page.locator('.trait-group-modal')).toBeHidden();
+    await expect(page.locator('#traitAskGrid .trait-group-btn')).toContainText('Light hair');
+    await expect(page.locator('#traitAskGrid .trait-group-btn .trait-ask-answer')).toHaveText('No');
+
+    // The category is used up for the turn, same as any other trait-ask button.
+    await expect(page.locator('#traitAskGrid .trait-group-btn')).toBeDisabled();
+  });
+
+  test('cancelling the option picker asks nothing and keeps the category open', async ({ page }) => {
+    await completeSetup(page, 'alice', 'bob', 'grouped-board');
+
+    await page.click('#traitAskGrid .trait-group-btn');
+    await page.click('#cancelTraitGroupBtn');
+    await expect(page.locator('.trait-group-modal')).toBeHidden();
+    await expect(page.locator('#traitAskGrid .trait-group-btn')).toBeEnabled();
+    await expect(page.locator('#finalGuessBtn')).toBeVisible();
   });
 });
 

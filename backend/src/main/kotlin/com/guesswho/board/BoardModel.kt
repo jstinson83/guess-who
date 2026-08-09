@@ -8,6 +8,11 @@ enum class Tier { CORE, SECONDARY, SPICE }
  *
  * [exclusiveWith] models forced-choice pairs (e.g. light/dark hair) where a
  * character may have at most one of the linked feature ids.
+ *
+ * [groupLabel] names the shared category for an [exclusiveWith] pair/set (e.g. "Hair
+ * color" for hair_light/hair_dark) — null for standalone features. Purely a UI hint: the
+ * pass-and-play trait-ask screen uses it to collapse related features under one
+ * category button instead of listing every one flat. Doesn't affect balancing/detection.
  */
 data class FeatureDef(
     val id: String,
@@ -15,6 +20,7 @@ data class FeatureDef(
     val tier: Tier,
     val targetYesFraction: ClosedFloatingPointRange<Double>,
     val exclusiveWith: Set<String> = emptySet(),
+    val groupLabel: String? = null,
 )
 
 interface FeaturePool {

@@ -112,6 +112,40 @@ function traitAskButtonHtml({ label, asked, answer }) {
     : `<span>${escapeHtml(label)}</span>`;
 }
 
+// A category button collapsing a group of mutually-exclusive features (e.g. "Hair color"
+// covering hair_light/hair_dark) into one entry in the trait-ask grid — tapping it opens
+// traitGroupModalHtml to ask about a specific option, instead of listing every option flat.
+function traitGroupButtonHtml({ label, options, myAnswers }) {
+  const answered = options.filter((o) => Object.prototype.hasOwnProperty.call(myAnswers, o.id));
+  const summary = answered
+    .map(
+      (o) =>
+        `${escapeHtml(o.label)}: <span class="trait-ask-answer trait-ask-answer-${myAnswers[o.id] ? 'yes' : 'no'}">${myAnswers[o.id] ? 'Yes' : 'No'}</span>`
+    )
+    .join(', ');
+  return `
+    <span>${escapeHtml(label)}</span>
+    <span class="trait-group-summary">${summary || 'Choose…'}</span>
+  `;
+}
+
+function traitGroupModalHtml({ label, options, myAnswers }) {
+  return `
+    <div class="modal trait-group-modal">
+      <h2>${escapeHtml(label)}</h2>
+      <div class="trait-group-options" id="traitGroupOptions">
+        ${options
+          .map((o) => {
+            const asked = Object.prototype.hasOwnProperty.call(myAnswers, o.id);
+            return `<button type="button" class="trait-ask-btn" data-id="${o.id}"${asked ? ' disabled' : ''}>${traitAskButtonHtml({ label: o.label, asked, answer: myAnswers[o.id] })}</button>`;
+          })
+          .join('')}
+      </div>
+      <button class="link-btn" id="cancelTraitGroupBtn">Cancel</button>
+    </div>
+  `;
+}
+
 function guessPickerHtml() {
   return `
     <div class="modal guess-picker-modal">
