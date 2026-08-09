@@ -16,7 +16,7 @@ source for a board's add-character flow. Broken into independently
 testable chunks; tackle in order, each shippable/verifiable before
 starting the next.
 
-- [ ] **Chunk 1 — backend storage/data layer** (no routes, no UI):
+- [x] **Chunk 1 — backend storage/data layer** (no routes, no UI):
       `PhotoBankRepository` interface + `FirestorePhotoBankRepository` +
       an in-memory impl for tests, mirroring `BoardRepository`'s split.
       Generalize `PortraitOptimizer`'s `MAX_DIMENSION` into a parameter —

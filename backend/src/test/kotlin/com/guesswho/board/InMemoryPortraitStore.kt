@@ -12,4 +12,8 @@ class InMemoryPortraitStore : PortraitStore {
     }
 
     override suspend fun fetch(objectName: String): StoredPortrait? = objects[objectName]
+
+    override suspend fun delete(objectName: String) {
+        objects.remove(objectName)
+    }
 }
