@@ -35,6 +35,14 @@ function characterCardHtml(character, traitLabels) {
   `;
 }
 
+function photoBankCardHtml(photo) {
+  const count = photo.detectedFeatures.length;
+  return `
+    <img src="${photo.imageUrl || ''}" alt="Library photo" />
+    <div class="character-card-traits">${count} feature${count === 1 ? '' : 's'} detected</div>
+  `;
+}
+
 function traitSwitchHtml({ feature, shouldCheck, status, stateClass, reason }) {
   return `
     <input type="checkbox" value="${feature.id}" data-exclusive-with="${feature.exclusiveWith.join(',')}" ${feature.available ? '' : 'disabled'} ${shouldCheck ? 'checked' : ''} />

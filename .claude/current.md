@@ -34,7 +34,7 @@ starting the next.
       mirrors the character-portrait route), `DELETE
       /api/photobank/{bankId}/photos/{photoId}`. Verify with curl/route
       tests, no frontend needed yet.
-- [ ] **Chunk 3 — Photo Library screen** (frontend), fully standalone, no
+- [x] **Chunk 3 — Photo Library screen** (frontend), fully standalone, no
       board touches it: nav entry, grid view, "Add photo" (reuses the
       existing Cropper.js crop step from add-character), click-to-modal
       (photo + full detected-feature list — same click-to-modal mechanic

@@ -78,6 +78,26 @@ test.describe('characterCardHtml', () => {
   });
 });
 
+test.describe('photoBankCardHtml', () => {
+  test('renders the photo and a singular feature count', async ({ page }) => {
+    const html = await page.evaluate(() =>
+      photoBankCardHtml({ imageUrl: '/p.png', detectedFeatures: ['glasses'] })
+    );
+    expect(html).toContain('/p.png');
+    expect(html).toContain('1 feature detected');
+  });
+
+  test('pluralizes the count for zero or multiple features', async ({ page }) => {
+    const zero = await page.evaluate(() => photoBankCardHtml({ imageUrl: '', detectedFeatures: [] }));
+    expect(zero).toContain('0 features detected');
+
+    const many = await page.evaluate(() =>
+      photoBankCardHtml({ imageUrl: '', detectedFeatures: ['glasses', 'hat'] })
+    );
+    expect(many).toContain('2 features detected');
+  });
+});
+
 test.describe('traitSwitchHtml', () => {
   test('renders a checked, enabled input for an available, selected feature', async ({ page }) => {
     const html = await page.evaluate(() =>

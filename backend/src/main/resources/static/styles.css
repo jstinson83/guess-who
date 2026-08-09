@@ -32,6 +32,37 @@ main {
   margin: 0 auto;
 }
 
+/* --- Top nav (Boards / Photo Library) --- */
+
+.top-nav {
+  max-width: 640px;
+  margin: 0 auto 1.25rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.top-nav-link {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--navy);
+  text-decoration: none;
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.top-nav-link:hover {
+  border-color: var(--accent);
+}
+
+.top-nav-link-active {
+  background: var(--navy);
+  border-color: var(--navy);
+  color: #fff;
+}
+
 h1 {
   font-family: 'Sniglet', sans-serif;
   font-weight: 400;
@@ -554,6 +585,15 @@ button:disabled {
   pointer-events: none;
 }
 
+.photobank-panel {
+  position: relative;
+}
+
+.photobank-panel.busy > *:not(.panel-overlay) {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
 .panel-overlay {
   position: absolute;
   inset: 0;
@@ -684,6 +724,13 @@ button:disabled {
 
 .modal button {
   width: 100%;
+}
+
+.modal-delete-btn {
+  display: block;
+  margin: 0.75rem 0 0;
+  text-align: center;
+  color: var(--accent);
 }
 
 /* ==========================================================================

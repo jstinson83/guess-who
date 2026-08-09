@@ -3,10 +3,25 @@ const boardDetailView = document.getElementById('boardDetailView');
 const cropView = document.getElementById('cropView');
 const featuresView = document.getElementById('featuresView');
 const gameView = document.getElementById('gameView');
+const libraryView = document.getElementById('libraryView');
 const gameContent = document.getElementById('gameContent');
 const playBoardBtn = document.getElementById('playBoardBtn');
 const boardList = document.getElementById('boardList');
 const createBoardStatus = document.getElementById('createBoardStatus');
+
+const navBoardsLink = document.getElementById('navBoards');
+const navLibraryLink = document.getElementById('navLibrary');
+
+const photoBankPanel = document.getElementById('photoBankPanel');
+const photoBankOverlay = document.getElementById('photoBankOverlay');
+const photoBankGrid = document.getElementById('photoBankGrid');
+const libraryStatusEl = document.getElementById('libraryStatus');
+const libraryFabContainer = document.getElementById('libraryFabContainer');
+const libraryFabMain = document.getElementById('libraryFabMain');
+const libraryFabCamera = document.getElementById('libraryFabCamera');
+const libraryFabUpload = document.getElementById('libraryFabUpload');
+const libraryCameraInput = document.getElementById('libraryCameraInput');
+const libraryUploadInput = document.getElementById('libraryUploadInput');
 
 const boardNameEl = document.getElementById('boardName');
 const boardMetaEl = document.getElementById('boardMeta');
@@ -24,6 +39,7 @@ const cropContainer = document.getElementById('cropContainer');
 const cropImage = document.getElementById('cropImage');
 const confirmCropBtn = document.getElementById('confirmCropBtn');
 const cropBackBtn = document.getElementById('cropBackBtn');
+const cropStatusEl = document.getElementById('cropStatus');
 
 const personNameInput = document.getElementById('personName');
 const generateBtn = document.getElementById('generateBtn');
@@ -40,6 +56,7 @@ const characterModalTitle = document.getElementById('characterModalTitle');
 const characterModalPortrait = document.getElementById('characterModalPortrait');
 const characterModalSubtitle = document.getElementById('characterModalSubtitle');
 const characterModalDismissBtn = document.getElementById('characterModalDismissBtn');
+const characterModalDeleteBtn = document.getElementById('characterModalDeleteBtn');
 
 let cropper = null;
 let currentBoard = null;
@@ -48,19 +65,29 @@ let detectedTraitIds = [];
 // (see `startNewGame`/`showGameView`). Lost on refresh; that's fine for a same-room MVP.
 let gameState = null;
 
-// Photo picked from the FAB, waiting to be cropped.
+// Photo picked from the FAB, waiting to be cropped. Shared by both the board add-character flow
+// and the Photo Library add-photo flow — only one crop can be in progress at a time, and
+// `pendingCropMode` (see showCropView) says which flow the confirmed crop feeds into.
 let pendingPhotoFile = null;
+let pendingCropMode = 'board';
 // Cropped blobs (a small one for trait detection, a larger one for the final generate call),
 // produced together when the crop is confirmed so the cropper doesn't need to stay alive
-// across the crop -> features page transition.
+// across the crop -> features page transition. Board flow only — the library flow needs just
+// one blob, since the server does its own resizing + detection on upload.
 let pendingDetectBlob = null;
 let pendingFullBlob = null;
+
+// Photo Library state: the current bank's photos, and a cached id -> label map for rendering
+// detectedFeatures (which the API only returns as ids) — fetched once from /api/features since
+// the pool is fixed data, not per-bank.
+let libraryPhotos = [];
+let libraryFeatureLabels = null;
 
 // --- Routing: '#/board/<id>' shows the detail view, '.../crop' and '.../features' are the
 // add-a-character wizard steps, anything else shows the board list. ---
 
 function showOnly(view) {
-  for (const v of [boardListView, boardDetailView, cropView, featuresView, gameView]) {
+  for (const v of [boardListView, boardDetailView, cropView, featuresView, gameView, libraryView]) {
     v.classList.toggle('hidden', v !== view);
   }
 }
@@ -72,15 +99,25 @@ async function route() {
   const featuresMatch = location.hash.match(/^#\/board\/([^/]+)\/features$/);
   const playMatch = location.hash.match(/^#\/board\/([^/]+)\/play$/);
   const detailMatch = location.hash.match(/^#\/board\/([^/]+)$/);
+  const libraryCropMatch = location.hash.match(/^#\/library\/crop$/);
+  const libraryMatch = location.hash.match(/^#\/library$/);
+
+  const inLibrary = Boolean(libraryMatch || libraryCropMatch);
+  navBoardsLink.classList.toggle('top-nav-link-active', !inLibrary);
+  navLibraryLink.classList.toggle('top-nav-link-active', inLibrary);
 
   if (cropMatch) {
-    await showCropView(cropMatch[1]);
+    await showCropView(cropMatch[1], 'board');
   } else if (featuresMatch) {
     await showFeaturesView(featuresMatch[1]);
   } else if (playMatch) {
     await showGameView(playMatch[1]);
   } else if (detailMatch) {
     await showBoardDetail(detailMatch[1]);
+  } else if (libraryCropMatch) {
+    await showCropView(null, 'library');
+  } else if (libraryMatch) {
+    await showLibraryView();
   } else {
     showBoardList();
   }
@@ -564,15 +601,26 @@ uploadInput.addEventListener('change', onPhotoChosen);
 
 // --- Crop step ---
 
-async function showCropView(id) {
-  const ok = await ensureBoardLoaded(id);
-  if (!ok || !pendingPhotoFile) {
-    location.hash = `#/board/${id}`;
-    return;
+async function showCropView(id, mode) {
+  pendingCropMode = mode;
+
+  if (mode === 'library') {
+    if (!pendingPhotoFile) {
+      location.hash = '#/library';
+      return;
+    }
+  } else {
+    const ok = await ensureBoardLoaded(id);
+    if (!ok || !pendingPhotoFile) {
+      location.hash = `#/board/${id}`;
+      return;
+    }
   }
   showOnly(cropView);
 
   confirmCropBtn.disabled = true;
+  cropStatusEl.textContent = '';
+  cropStatusEl.className = 'status';
   cropImage.src = URL.createObjectURL(pendingPhotoFile);
 
   if (cropper) {
@@ -596,13 +644,26 @@ cropBackBtn.addEventListener('click', () => {
     cropper = null;
   }
   pendingPhotoFile = null;
-  if (currentBoard) location.hash = `#/board/${currentBoard.id}`;
+  if (pendingCropMode === 'library') {
+    location.hash = '#/library';
+  } else if (currentBoard) {
+    location.hash = `#/board/${currentBoard.id}`;
+  }
 });
 
 confirmCropBtn.addEventListener('click', () => {
-  if (!cropper || !currentBoard) return;
+  if (!cropper) return;
   confirmCropBtn.disabled = true;
 
+  if (pendingCropMode === 'library') {
+    // Cropper stays alive (and pendingPhotoFile unset) until the upload actually succeeds, so a
+    // failed upload leaves the crop screen retryable — see uploadLibraryPhoto.
+    const canvas = cropper.getCroppedCanvas({ width: 1024, height: 1024 });
+    canvas.toBlob((blob) => uploadLibraryPhoto(blob), 'image/png');
+    return;
+  }
+
+  if (!currentBoard) return;
   const detectCanvas = cropper.getCroppedCanvas({ width: 512, height: 512 });
   const fullCanvas = cropper.getCroppedCanvas({ width: 768, height: 768 });
   detectCanvas.toBlob((detectBlob) => {
@@ -802,13 +863,17 @@ generateBtn.addEventListener('click', async () => {
 });
 
 // --- Character modal: shown on successful create and on tile click. Dismissing lands back
-// on the board detail page (a no-op hash set if already there). ---
+// on the board detail page (a no-op hash set if already there). Also reused, unchanged, by the
+// Photo Library's click-to-modal (see openLibraryPhotoModal) — currentBoard is null while
+// viewing the library, so dismissing there just hides the modal instead of navigating. ---
 
-function showCharacterModal({ title, portraitUrl, subtitle }) {
+function showCharacterModal({ title, portraitUrl, subtitle, onDelete }) {
   characterModalTitle.textContent = title;
   characterModalPortrait.src = portraitUrl || '';
   characterModalPortrait.alt = title;
   characterModalSubtitle.textContent = subtitle;
+  characterModalDeleteBtn.classList.toggle('hidden', !onDelete);
+  characterModalDeleteBtn.onclick = onDelete || null;
   characterModal.classList.remove('hidden');
 }
 
@@ -821,3 +886,162 @@ characterModalDismissBtn.addEventListener('click', dismissCharacterModal);
 characterModal.addEventListener('click', (e) => {
   if (e.target === characterModal) dismissCharacterModal();
 });
+
+// --- Photo Library: board-agnostic photo grid, standalone from any board. Bank id is hardcoded
+// to "default" — the only bank that exists today (see .claude/current.md). ---
+
+const PHOTO_BANK_ID = 'default';
+
+async function ensureFeatureLabels() {
+  if (libraryFeatureLabels) return libraryFeatureLabels;
+  const res = await fetch('/api/features');
+  const features = await res.json();
+  libraryFeatureLabels = new Map(features.map((f) => [f.id, f.label]));
+  return libraryFeatureLabels;
+}
+
+async function showLibraryView() {
+  showOnly(libraryView);
+  currentBoard = null;
+
+  photoBankGrid.innerHTML = '';
+  libraryStatusEl.textContent = '';
+  libraryStatusEl.className = 'status';
+  photoBankPanel.classList.add('busy');
+  photoBankOverlay.classList.remove('hidden');
+
+  try {
+    await ensureFeatureLabels();
+    const res = await fetch(`/api/photobank/${PHOTO_BANK_ID}/photos`);
+    const photos = await res.json();
+    if (!res.ok) throw new Error(photos.error || 'Failed to load photo library');
+    libraryPhotos = photos;
+    renderLibraryGrid();
+  } catch (err) {
+    photoBankGrid.innerHTML = `<p class="status error">${escapeHtml(err.message)}</p>`;
+  } finally {
+    photoBankPanel.classList.remove('busy');
+    photoBankOverlay.classList.add('hidden');
+  }
+}
+
+function renderLibraryGrid() {
+  photoBankGrid.classList.toggle('character-grid-empty', libraryPhotos.length === 0);
+  if (libraryPhotos.length === 0) {
+    photoBankGrid.innerHTML = '<p class="status">No photos yet — add one below.</p>';
+    return;
+  }
+
+  photoBankGrid.innerHTML = '';
+  for (const photo of libraryPhotos) {
+    const card = document.createElement('div');
+    card.className = 'character-card';
+    card.dataset.id = photo.id;
+    card.tabIndex = 0;
+    card.setAttribute('role', 'button');
+    card.innerHTML = photoBankCardHtml(photo);
+    photoBankGrid.appendChild(card);
+  }
+}
+
+function openLibraryPhotoModal(id) {
+  const photo = libraryPhotos.find((p) => p.id === id);
+  if (!photo) return;
+  const labels = photo.detectedFeatures.map((fid) => libraryFeatureLabels.get(fid) || fid);
+  showCharacterModal({
+    title: 'Library photo',
+    portraitUrl: photo.imageUrl,
+    subtitle: labels.length ? labels.join(', ') : 'No features detected',
+    onDelete: () => deleteLibraryPhoto(photo.id),
+  });
+}
+
+photoBankGrid.addEventListener('click', (e) => {
+  const card = e.target.closest('.character-card');
+  if (card) openLibraryPhotoModal(card.dataset.id);
+});
+
+photoBankGrid.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const card = e.target.closest('.character-card');
+  if (!card) return;
+  e.preventDefault();
+  openLibraryPhotoModal(card.dataset.id);
+});
+
+async function deleteLibraryPhoto(id) {
+  if (!confirm('Delete this photo from the library? Characters already created from it keep their own portrait and traits.')) return;
+
+  characterModal.classList.add('hidden');
+  photoBankPanel.classList.add('busy');
+  photoBankOverlay.classList.remove('hidden');
+
+  try {
+    const res = await fetch(`/api/photobank/${PHOTO_BANK_ID}/photos/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Failed to delete photo');
+    libraryPhotos = libraryPhotos.filter((p) => p.id !== id);
+    renderLibraryGrid();
+  } catch (err) {
+    libraryStatusEl.textContent = err.message;
+    libraryStatusEl.className = 'status error';
+  } finally {
+    photoBankPanel.classList.remove('busy');
+    photoBankOverlay.classList.add('hidden');
+  }
+}
+
+// --- Add photo (FAB): pick a photo (camera or upload), then bounce to the crop step. ---
+
+libraryFabMain.addEventListener('click', () => {
+  libraryFabContainer.classList.toggle('fab-open');
+});
+
+libraryFabCamera.addEventListener('click', () => {
+  libraryFabContainer.classList.remove('fab-open');
+  libraryCameraInput.click();
+});
+
+libraryFabUpload.addEventListener('click', () => {
+  libraryFabContainer.classList.remove('fab-open');
+  libraryUploadInput.click();
+});
+
+function onLibraryPhotoChosen(e) {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  pendingPhotoFile = file;
+  location.hash = '#/library/crop';
+}
+
+libraryCameraInput.addEventListener('change', onLibraryPhotoChosen);
+libraryUploadInput.addEventListener('change', onLibraryPhotoChosen);
+
+// Uploads the confirmed crop — the server resizes it and runs detectTraits() itself, so unlike
+// the board flow there's no separate features step. Stays on the crop screen for the (Gemini-
+// backed, so not instant) duration of the call, only navigating to the library on success — a
+// failure leaves the user able to retry or cancel, rather than racing a hash change against the
+// upload like a "navigate first, upload after" version of this would.
+async function uploadLibraryPhoto(blob) {
+  cropStatusEl.textContent = 'Uploading and detecting features…';
+  cropStatusEl.className = 'status';
+
+  const form = new FormData();
+  form.append('image', blob, 'photo.png');
+
+  try {
+    const res = await fetch(`/api/photobank/${PHOTO_BANK_ID}/photos`, { method: 'POST', body: form });
+    const photo = await res.json();
+    if (!res.ok) throw new Error(photo.error || 'Upload failed');
+    if (cropper) {
+      cropper.destroy();
+      cropper = null;
+    }
+    pendingPhotoFile = null;
+    location.hash = '#/library';
+  } catch (err) {
+    cropStatusEl.textContent = err.message;
+    cropStatusEl.className = 'status error';
+    confirmCropBtn.disabled = false;
+  }
+}
