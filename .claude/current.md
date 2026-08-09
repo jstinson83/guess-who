@@ -25,7 +25,7 @@ starting the next.
       input, not just a thumbnail. New GCS prefix
       `photobank/{bankId}/{photoId}` in the existing portraits bucket.
       Verify with repository unit tests only.
-- [ ] **Chunk 2 — Photo Bank HTTP API**: `POST /api/photobank/{bankId}/photos`
+- [x] **Chunk 2 — Photo Bank HTTP API**: `POST /api/photobank/{bankId}/photos`
       (cropped image in → resize → `detectTraits()` against the full
       feature pool → store → return photo DTO with features), `GET
       /api/photobank/{bankId}/photos` (list, features inline — avoids an

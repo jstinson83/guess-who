@@ -1,10 +1,14 @@
 package com.guesswho
 
+import com.google.cloud.firestore.Firestore
 import com.google.cloud.firestore.FirestoreOptions
 import com.google.cloud.storage.StorageOptions
 import com.guesswho.board.BoardRepository
 import com.guesswho.board.FirestoreBoardRepository
 import com.guesswho.board.boardRoutes
+import com.guesswho.photobank.FirestorePhotoBankRepository
+import com.guesswho.photobank.PhotoBankRepository
+import com.guesswho.photobank.photoBankRoutes
 import com.guesswho.storage.GcsPortraitStore
 import com.guesswho.storage.PortraitStore
 import io.ktor.client.HttpClient
@@ -72,11 +76,20 @@ fun Application.module() {
 
     // A named database, not `(default)` — this GCP project already has a `(default)` Firestore
     // database in use by an unrelated app, and named databases keep the two fully separate.
-    // Deferred until a board route is actually hit, so plain `/api/transform` usage (e.g. local
-    // dev without GCP application-default credentials configured) still works.
+    // Deferred until a board or photo-bank route is actually hit, so plain `/api/transform` usage
+    // (e.g. local dev without GCP application-default credentials configured) still works. Shared
+    // between boardRepository and photoBankRepository below rather than each building its own
+    // client.
+    val firestore: Lazy<Firestore> = lazy {
+        FirestoreOptions.newBuilder().setDatabaseId(FIRESTORE_DATABASE_ID).build().service
+    }
+
     val boardRepository: Lazy<BoardRepository> = lazy {
-        val firestore = FirestoreOptions.newBuilder().setDatabaseId(FIRESTORE_DATABASE_ID).build().service
-        FirestoreBoardRepository(firestore, portraitStore.value)
+        FirestoreBoardRepository(firestore.value, portraitStore.value)
+    }
+
+    val photoBankRepository: Lazy<PhotoBankRepository> = lazy {
+        FirestorePhotoBankRepository(firestore.value, portraitStore.value)
     }
 
     routing {
@@ -131,5 +144,6 @@ fun Application.module() {
         }
 
         boardRoutes(boardRepository, httpClient, portraitStore)
+        photoBankRoutes(photoBankRepository, httpClient)
     }
 }
