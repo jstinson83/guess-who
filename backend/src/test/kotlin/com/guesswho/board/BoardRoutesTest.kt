@@ -190,6 +190,60 @@ class BoardRoutesTest {
     }
 
     @Test
+    fun `random resume rejects a board with no stalled run to resume`() = testApplication {
+        val repo = repository()
+        application { installBoardRoutes(repo) }
+
+        // Fresh, never-generated board: IN_PROGRESS but no generationError.
+        val board = runBlocking { repo.value.createBoard("The Smiths", 12) }
+
+        val response = client.post("/api/boards/${board.id}/random/resume")
+        assertEquals(HttpStatusCode.Conflict, response.status)
+        assertTrue(response.bodyAsText().contains("no stalled generation run"))
+    }
+
+    @Test
+    fun `random resume rejects an unknown board`() = testApplication {
+        application { installBoardRoutes() }
+
+        assertEquals(HttpStatusCode.NotFound, client.post("/api/boards/does-not-exist/random/resume").status)
+    }
+
+    @Test
+    fun `random resume rejects a board that already reached its target size`() = testApplication {
+        val repo = repository()
+        application { installBoardRoutes(repo) }
+
+        val board = runBlocking {
+            val created = repo.value.createBoard("The Smiths", 1)
+            repo.value.addCharacter(created.id, "Character 1", setOf("glasses"), null, null)
+            repo.value.stopGenerating(created.id, "Generated 1 of 1 — should never happen, but exercised anyway")!!
+        }
+
+        val response = client.post("/api/boards/${board.id}/random/resume")
+        assertEquals(HttpStatusCode.Conflict, response.status)
+        assertTrue(response.bodyAsText().contains("already reached its target size"))
+    }
+
+    @Test
+    fun `random resume fails fast without a GEMINI_API_KEY, without touching board status`() = testApplication {
+        val repo = repository()
+        application { installBoardRoutes(repo) }
+
+        val board = runBlocking {
+            val created = repo.value.createBoard("The Smiths", 12)
+            repo.value.stopGenerating(created.id, "Generated 0 of 12 — the photo library is empty.")!!
+        }
+
+        val response = client.post("/api/boards/${board.id}/random/resume")
+        assertEquals(HttpStatusCode.InternalServerError, response.status)
+        assertTrue(response.bodyAsText().contains("GEMINI_API_KEY"))
+
+        val after = repo.value.getBoard(board.id)!!
+        assertEquals(BoardStatus.IN_PROGRESS, after.status)
+    }
+
+    @Test
     fun `create board then fetch it back`() = testApplication {
         application { installBoardRoutes() }
 

@@ -145,5 +145,67 @@ test.describe('board detail generation progress', () => {
     await expect(page.locator('#boardGeneratingBanner')).toBeHidden();
     await expect(page.locator('#boardGenerationNotice')).toBeVisible();
     await expect(page.locator('#boardGenerationNotice')).toContainText('feature pool is exhausted');
+    await expect(page.locator('#resumeGenerationBtn')).toBeVisible();
+  });
+
+  test('resuming a stalled run clears the notice and starts polling again', async ({ page }) => {
+    let resumed = false;
+
+    await page.route('**/api/boards/rb1', (route) => {
+      if (route.request().method() === 'GET') {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(
+            board({
+              status: 'IN_PROGRESS',
+              characters: [{ id: 'c0', name: 'Character 1', traits: ['glasses'], portraitUrl: PIXEL }],
+              generationError: 'Generated 1 of 3 — the photo library is empty. Add photos to the library, or add the rest manually.',
+            })
+          ),
+        });
+      }
+      return route.continue();
+    });
+    await page.route('**/api/boards/rb1/random/resume', (route) => {
+      resumed = true;
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(
+          board({
+            status: 'GENERATING',
+            characters: [{ id: 'c0', name: 'Character 1', traits: ['glasses'], portraitUrl: PIXEL }],
+          })
+        ),
+      });
+    });
+    await page.route('**/api/boards/rb1/random/step', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(
+          board({
+            status: 'IN_PROGRESS',
+            characters: Array.from({ length: 3 }, (_, i) => ({
+              id: `c${i}`,
+              name: `Character ${i + 1}`,
+              traits: ['glasses'],
+              portraitUrl: PIXEL,
+            })),
+          })
+        ),
+      })
+    );
+
+    await page.goto('/#/board/rb1');
+    await expect(page.locator('#resumeGenerationBtn')).toBeVisible();
+
+    await page.locator('#resumeGenerationBtn').click();
+    expect(resumed).toBe(true);
+
+    await expect(page.locator('#boardGenerationNotice')).toBeHidden();
+    await expect(page.locator('#resumeGenerationBtn')).toBeHidden();
+    await expect(page.locator('.character-card')).toHaveCount(3, { timeout: 10000 });
   });
 });

@@ -278,6 +278,40 @@ fun Route.boardRoutes(
                 call.respond(board.toDetailDto())
             }
 
+            // A run that hit a permanent stop (see runOneRandomStep's `stopGenerating` calls —
+            // an empty photo bank, or the feature pool exhausted for this board's quotas) leaves
+            // the board IN_PROGRESS with `generationError` set, and *stays* that way: the client
+            // only polls /random/step while status is GENERATING, so nothing resumes it on its
+            // own even once whatever caused the stop is fixed (more photos added, target size
+            // lowered, a code fix shipped). This is the only way back into that loop — clears
+            // generationError and flips back to GENERATING, same as a fresh POST /random, and the
+            // client's existing poll loop picks it up from there.
+            post("/random/resume") {
+                val id = call.parameters["id"]!!
+                val board = repository.value.getBoard(id)
+                if (board == null) {
+                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Board not found"))
+                    return@post
+                }
+                if (board.status != BoardStatus.IN_PROGRESS || board.generationError == null) {
+                    call.respond(HttpStatusCode.Conflict, mapOf("error" to "Board has no stalled generation run to resume"))
+                    return@post
+                }
+                if (board.characters.size >= board.targetSize) {
+                    call.respond(HttpStatusCode.Conflict, mapOf("error" to "Board has already reached its target size"))
+                    return@post
+                }
+
+                val apiKey = System.getenv("GEMINI_API_KEY")
+                if (apiKey.isNullOrBlank()) {
+                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "GEMINI_API_KEY is not set on the server"))
+                    return@post
+                }
+
+                repository.value.startGenerating(id)
+                call.respond(repository.value.getBoard(id)!!.toDetailDto())
+            }
+
             post("/complete") {
                 val id = call.parameters["id"]!!
                 val board = repository.value.getBoard(id)
