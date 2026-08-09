@@ -9,20 +9,22 @@ import javax.imageio.IIOImage
 import javax.imageio.ImageIO
 import javax.imageio.ImageWriteParam
 
-private const val MAX_DIMENSION = 640
+private const val PORTRAIT_MAX_DIMENSION = 640
 private const val JPEG_QUALITY = 0.85f
 
 /**
- * Downscales and re-encodes a freshly generated portrait as JPEG before it's stored, so the
- * board UI isn't re-fetching Gemini's full-resolution PNG (routinely ~1MB) on every view over a
- * mobile connection. Portraits are head-and-shoulders crops on a plain solid background (see the
- * prompt in Gemini.kt), so JPEG's lossy compression and lack of alpha channel aren't a visible
- * tradeoff here. Fails open: bytes ImageIO can't decode are stored as-is rather than dropped.
+ * Downscales and re-encodes an image as JPEG before it's stored, so callers aren't re-fetching
+ * a full-resolution PNG (routinely ~1MB) on every view over a mobile connection. [maxDimension]
+ * defaults to the generated-portrait size (head-and-shoulders crops on a plain solid background,
+ * see the prompt in Gemini.kt); the photo bank passes a larger value since a bank photo is also
+ * future `generatePortrait()` input, not just a thumbnail. JPEG's lossy compression and lack of
+ * alpha channel aren't a visible tradeoff for either use. Fails open: bytes ImageIO can't decode
+ * are stored as-is rather than dropped.
  */
-fun optimizePortrait(bytes: ByteArray, mimeType: String): StoredPortrait {
+fun optimizePortrait(bytes: ByteArray, mimeType: String, maxDimension: Int = PORTRAIT_MAX_DIMENSION): StoredPortrait {
     val source = ImageIO.read(ByteArrayInputStream(bytes)) ?: return StoredPortrait(bytes, mimeType)
 
-    val scale = (MAX_DIMENSION.toDouble() / maxOf(source.width, source.height)).coerceAtMost(1.0)
+    val scale = (maxDimension.toDouble() / maxOf(source.width, source.height)).coerceAtMost(1.0)
     val targetWidth = (source.width * scale).toInt().coerceAtLeast(1)
     val targetHeight = (source.height * scale).toInt().coerceAtLeast(1)
 

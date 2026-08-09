@@ -13,6 +13,8 @@ interface PortraitStore {
     suspend fun upload(objectName: String, portrait: StoredPortrait)
 
     suspend fun fetch(objectName: String): StoredPortrait?
+
+    suspend fun delete(objectName: String)
 }
 
 /**
@@ -32,5 +34,10 @@ class GcsPortraitStore(private val storage: Storage, private val bucketName: Str
     override suspend fun fetch(objectName: String): StoredPortrait? = withContext(Dispatchers.IO) {
         val blob = storage.get(BlobId.of(bucketName, objectName)) ?: return@withContext null
         StoredPortrait(blob.getContent(), blob.contentType ?: "application/octet-stream")
+    }
+
+    override suspend fun delete(objectName: String): Unit = withContext(Dispatchers.IO) {
+        storage.delete(BlobId.of(bucketName, objectName))
+        Unit
     }
 }
