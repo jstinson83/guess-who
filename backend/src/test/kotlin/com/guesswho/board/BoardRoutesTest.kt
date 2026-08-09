@@ -55,6 +55,93 @@ class BoardRoutesTest {
     }
 
     @Test
+    fun `random board rejects an empty photo library`() = testApplication {
+        application { installBoardRoutes() }
+
+        val response = client.post("/api/boards/random") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"name":"The Smiths","targetSize":12}""")
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+        assertTrue(response.bodyAsText().contains("no photos"))
+    }
+
+    @Test
+    fun `random board fails fast without a GEMINI_API_KEY, without creating a board`() = testApplication {
+        val photoBankRepo = photoBankRepository()
+        val repo = repository()
+        application { installBoardRoutes(repo, photoBankRepo) }
+        runBlocking {
+            photoBankRepo.value.addPhoto(
+                "default",
+                setOf("glasses"),
+                com.guesswho.storage.StoredPortrait(byteArrayOf(1, 2, 3), "image/png"),
+            )
+        }
+
+        val response = client.post("/api/boards/random") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"name":"The Smiths","targetSize":12}""")
+        }
+
+        assertEquals(HttpStatusCode.InternalServerError, response.status)
+        assertTrue(response.bodyAsText().contains("GEMINI_API_KEY"))
+        assertTrue(repo.value.listBoards().isEmpty())
+    }
+
+    @Test
+    fun `random board rejects a blank name`() = testApplication {
+        application { installBoardRoutes() }
+
+        val response = client.post("/api/boards/random") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"name":"","targetSize":12}""")
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, response.status)
+    }
+
+    @Test
+    fun `random step on a board that isn't generating is a no-op returning current state`() = testApplication {
+        val repo = repository()
+        application { installBoardRoutes(repo) }
+
+        val createResponse = client.post("/api/boards") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"name":"The Smiths","targetSize":12}""")
+        }
+        val id = Json.parseToJsonElement(createResponse.bodyAsText()).jsonObject.getValue("id").jsonPrimitive.content
+
+        val response = client.post("/api/boards/$id/random/step")
+        assertEquals(HttpStatusCode.OK, response.status)
+        val body = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+        assertEquals("IN_PROGRESS", body.getValue("status").jsonPrimitive.content)
+    }
+
+    @Test
+    fun `random step on an unknown board returns 404`() = testApplication {
+        application { installBoardRoutes() }
+
+        assertEquals(HttpStatusCode.NotFound, client.post("/api/boards/does-not-exist/random/step").status)
+    }
+
+    @Test
+    fun `random step without a GEMINI_API_KEY stops generating and reports the error`() = testApplication {
+        val repo = repository()
+        application { installBoardRoutes(repo) }
+
+        val board = runBlocking { repo.value.createBoard("The Smiths", 12) }
+        runBlocking { repo.value.startGenerating(board.id) }
+
+        val response = client.post("/api/boards/${board.id}/random/step")
+        assertEquals(HttpStatusCode.InternalServerError, response.status)
+        val body = Json.parseToJsonElement(response.bodyAsText()).jsonObject
+        assertEquals("IN_PROGRESS", body.getValue("status").jsonPrimitive.content)
+        assertTrue(body.getValue("generationError").jsonPrimitive.content.contains("GEMINI_API_KEY"))
+    }
+
+    @Test
     fun `create board then fetch it back`() = testApplication {
         application { installBoardRoutes() }
 
@@ -279,6 +366,42 @@ class BoardRoutesTest {
 
         assertEquals(HttpStatusCode.InternalServerError, response.status)
         assertTrue(response.bodyAsText().contains("GEMINI_API_KEY"))
+    }
+
+    @Test
+    fun `adding a character to a generating board is rejected`() = testApplication {
+        val repo = repository()
+        application { installBoardRoutes(repo) }
+
+        val board = runBlocking { repo.value.createBoard("The Smiths", 12) }
+        runBlocking { repo.value.startGenerating(board.id) }
+
+        val response = client.post("/api/boards/${board.id}/characters") {
+            setBody(MultiPartFormDataContent(formData {
+                append("image", byteArrayOf(1, 2, 3), Headers.build {
+                    append(HttpHeaders.ContentType, "image/png")
+                    append(HttpHeaders.ContentDisposition, "filename=photo.png")
+                })
+                append("name", "Jordan")
+                append("traits", """["glasses","hat","facial_hair","long_hair","hair_light"]""")
+            }))
+        }
+
+        assertEquals(HttpStatusCode.Conflict, response.status)
+        assertTrue(response.bodyAsText().contains("still generating"))
+    }
+
+    @Test
+    fun `completing a generating board is rejected`() = testApplication {
+        val repo = repository()
+        application { installBoardRoutes(repo) }
+
+        val board = runBlocking { repo.value.createBoard("The Smiths", 1) }
+        runBlocking { repo.value.startGenerating(board.id) }
+
+        val response = client.post("/api/boards/${board.id}/complete")
+        assertEquals(HttpStatusCode.Conflict, response.status)
+        assertTrue(response.bodyAsText().contains("still generating"))
     }
 
     @Test

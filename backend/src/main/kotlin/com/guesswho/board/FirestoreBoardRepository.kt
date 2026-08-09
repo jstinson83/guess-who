@@ -131,6 +131,36 @@ class FirestoreBoardRepository(
         return getBoard(id)
     }
 
+    override suspend fun startGenerating(id: String): BoardState? {
+        val boardRef = boards.document(id)
+        if (!boardRef.get().await().exists()) return null
+
+        boardRef.update(
+            mapOf(
+                "status" to BoardStatus.GENERATING.name,
+                "generationError" to null,
+                "updatedAt" to Instant.now().toString(),
+            ),
+        ).await()
+
+        return getBoard(id)
+    }
+
+    override suspend fun stopGenerating(id: String, error: String?): BoardState? {
+        val boardRef = boards.document(id)
+        if (!boardRef.get().await().exists()) return null
+
+        boardRef.update(
+            mapOf(
+                "status" to BoardStatus.IN_PROGRESS.name,
+                "generationError" to error,
+                "updatedAt" to Instant.now().toString(),
+            ),
+        ).await()
+
+        return getBoard(id)
+    }
+
     private fun DocumentSnapshot.toBoardState(characters: List<Character>) = BoardState(
         targetSize = (getLong("targetSize") ?: 0L).toInt(),
         characters = characters,
@@ -139,6 +169,7 @@ class FirestoreBoardRepository(
         status = parseStatus(getString("status")),
         createdAt = getString("createdAt") ?: "",
         updatedAt = getString("updatedAt") ?: "",
+        generationError = getString("generationError"),
     )
 
     private fun DocumentSnapshot.toBoardSummary() = BoardSummary(

@@ -24,8 +24,21 @@ import io.ktor.server.routing.route
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
+// The only photo bank that exists today (mirrors PHOTO_BANK_ID in app.js) — random-board
+// generation isn't bank-aware yet since nothing else in the app is either.
+private const val RANDOM_BOARD_BANK_ID = "default"
+
+// How many candidate photos a single /random/step call will try against Gemini before giving up
+// for that round — bounds one HTTP request's worst-case duration/cost when a photo or two fails,
+// without silently retrying forever inside one request when something's systemically broken (a
+// bad key, Gemini down) — see the BadGateway fallback in /random/step below.
+private const val MAX_STEP_ATTEMPTS = 3
+
 @Serializable
 data class CreateBoardRequest(val name: String, val targetSize: Int)
+
+@Serializable
+data class RandomBoardRequest(val name: String, val targetSize: Int)
 
 @Serializable
 data class CharacterDto(
@@ -67,6 +80,7 @@ data class BoardDetailDto(
     val availableFeatures: List<FeatureAvailabilityDto>,
     val minTraitsPerCharacter: Int,
     val maxTraitsPerCharacter: Int,
+    val generationError: String? = null,
 )
 
 @Serializable
@@ -100,7 +114,8 @@ fun Route.featureRoutes() {
  * actually hit, rather than at server startup. [portraitStore] is used directly here (not through
  * [repository]) purely to fetch the style-reference template image for [generatePortrait] —
  * character portraits themselves still go through [repository]. [photoBankRepository] backs the
- * "choose from library" add-character path — see the `/characters` handler below.
+ * "choose from library" add-character path — see the `/characters` handler below — and the
+ * random-board generator (see `/random` and `/random/step` below).
  */
 fun Route.boardRoutes(
     repository: Lazy<BoardRepository>,
@@ -122,6 +137,41 @@ fun Route.boardRoutes(
 
             val board = repository.value.createBoard(request.name, request.targetSize)
             call.respond(HttpStatusCode.Created, board.toDetailDto())
+        }
+
+        // Creates the board in GENERATING status and returns immediately (no Gemini calls here)
+        // — the client then drives progress itself by repeatedly calling POST
+        // /{id}/random/step, one character per call, until the board leaves GENERATING. Doing it
+        // this way (client-paced steps, no server-side background job) means every unit of work
+        // happens inside a normal request/response, so there's no detached task that could stall
+        // between polls under Cloud Run's default CPU throttling — see CLAUDE.md.
+        post("/random") {
+            val request = call.receive<RandomBoardRequest>()
+            if (request.name.isBlank()) {
+                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Board name is required"))
+                return@post
+            }
+            if (request.targetSize <= 0) {
+                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "targetSize must be positive"))
+                return@post
+            }
+
+            val photos = photoBankRepository.value.listPhotos(RANDOM_BOARD_BANK_ID)
+            if (photos.isEmpty()) {
+                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "The photo library has no photos yet — add some first"))
+                return@post
+            }
+
+            val apiKey = System.getenv("GEMINI_API_KEY")
+            if (apiKey.isNullOrBlank()) {
+                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "GEMINI_API_KEY is not set on the server"))
+                return@post
+            }
+
+            val board = repository.value.createBoard(request.name, request.targetSize)
+            repository.value.startGenerating(board.id)
+
+            call.respond(HttpStatusCode.Accepted, repository.value.getBoard(board.id)!!.toDetailDto())
         }
 
         get {
@@ -191,11 +241,91 @@ fun Route.boardRoutes(
                 }
             }
 
+            // Client-paced unit of work for a board created via POST /random: plans and generates
+            // exactly one more character (trying a couple of candidate photos if the first fails
+            // at Gemini — see MAX_STEP_ATTEMPTS), persists it, and returns the updated board. The
+            // client just calls this in a loop until the response's status leaves GENERATING —
+            // see .claude/context.md for why there's no server-side background job here instead.
+            post("/random/step") {
+                val id = call.parameters["id"]!!
+                val board = repository.value.getBoard(id)
+                if (board == null) {
+                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Board not found"))
+                    return@post
+                }
+                if (board.status != BoardStatus.GENERATING) {
+                    // Already finished (or never started) — idempotent no-op so a client that's
+                    // slightly out of sync (two tabs, a resumed page load) just gets current state.
+                    call.respond(board.toDetailDto())
+                    return@post
+                }
+
+                val apiKey = System.getenv("GEMINI_API_KEY")
+                if (apiKey.isNullOrBlank()) {
+                    val stopped = repository.value.stopGenerating(id, "GEMINI_API_KEY is not set on the server")
+                    call.respond(HttpStatusCode.InternalServerError, stopped!!.toDetailDto())
+                    return@post
+                }
+
+                val usedPhotoIds = board.characters.mapNotNull { it.sourcePhotoId }.toSet()
+                val candidatePhotos = photoBankRepository.value.listPhotos(RANDOM_BOARD_BANK_ID).filter { it.id !in usedPhotoIds }
+                val plans = RandomBoardGenerator.plan(board, candidatePhotos).take(MAX_STEP_ATTEMPTS)
+
+                if (plans.isEmpty()) {
+                    val shortfall = board.targetSize - board.characters.size
+                    val error = if (shortfall <= 0) {
+                        null
+                    } else {
+                        "Generated ${board.characters.size} of ${board.targetSize} — ran out of usable library " +
+                            "photos. Add more to the library, or add the rest manually."
+                    }
+                    val stopped = repository.value.stopGenerating(id, error)
+                    call.respond(stopped!!.toDetailDto())
+                    return@post
+                }
+
+                val styleReference = runCatching { portraitStore.value.fetch(STYLE_TEMPLATE_OBJECT_NAME) }.getOrNull()
+                val labelById = DefaultFeaturePool.allFeatures().associateBy { it.id }
+
+                for (plan in plans) {
+                    val image = photoBankRepository.value.getPhotoImage(RANDOM_BOARD_BANK_ID, plan.photo.id) ?: continue
+                    val result = generatePortrait(
+                        httpClient, apiKey, image.bytes, image.contentType,
+                        traitPhrases = plan.traits.mapNotNull { labelById[it]?.label },
+                        removeTraitPhrases = plan.droppedDetectedTraits.mapNotNull { labelById[it]?.label },
+                        styleReferenceBytes = styleReference?.bytes,
+                        styleReferenceMime = styleReference?.contentType,
+                    )
+                    if (result is PortraitResult.Success) {
+                        val portrait = optimizePortrait(result.imageBytes, result.mimeType)
+                        var updated = repository.value.addCharacter(
+                            id, "Character ${board.characters.size + 1}", plan.traits, portrait, plan.photo.id,
+                        )!!
+                        if (updated.characters.size >= updated.targetSize) {
+                            updated = repository.value.stopGenerating(id, null)!!
+                        }
+                        call.respond(updated.toDetailDto())
+                        return@post
+                    }
+                }
+
+                // Every candidate this step tried failed at Gemini (transient outage, bad key,
+                // etc). Leave the board GENERATING — the client's poll loop just tries again —
+                // rather than treating a flaky call as a permanent stop; running out of plannable
+                // photos (above) is the only permanent stop. A distinct status lets the client
+                // tell "still working, had a hiccup" apart from real progress.
+                call.respond(HttpStatusCode.BadGateway, mapOf("error" to "Gemini failed for every photo tried this round — will retry"))
+            }
+
             post("/complete") {
                 val id = call.parameters["id"]!!
                 val board = repository.value.getBoard(id)
                 if (board == null) {
                     call.respond(HttpStatusCode.NotFound, mapOf("error" to "Board not found"))
+                    return@post
+                }
+                if (board.status == BoardStatus.GENERATING) {
+                    call.respond(HttpStatusCode.Conflict, mapOf("error" to "Board is still generating — wait for it to finish"))
                     return@post
                 }
                 if (board.characters.size < board.targetSize) {
@@ -212,6 +342,16 @@ fun Route.boardRoutes(
 
             post("/characters") {
                 val boardId = call.parameters["id"]!!
+
+                val existingBoard = repository.value.getBoard(boardId)
+                if (existingBoard == null) {
+                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Board not found"))
+                    return@post
+                }
+                if (existingBoard.status == BoardStatus.GENERATING) {
+                    call.respond(HttpStatusCode.Conflict, mapOf("error" to "Board is still generating — wait for it to finish"))
+                    return@post
+                }
 
                 var imageBytes: ByteArray? = null
                 var imageMime = "image/png"
@@ -353,6 +493,7 @@ private fun BoardState.toDetailDto() = BoardDetailDto(
     },
     minTraitsPerCharacter = BoardBalancer.MIN_TRAITS_PER_CHARACTER,
     maxTraitsPerCharacter = BoardBalancer.MAX_TRAITS_PER_CHARACTER,
+    generationError = generationError,
 )
 
 private fun BoardSummary.toDto() = BoardSummaryDto(id, name, targetSize, characterCount, status.name, updatedAt)

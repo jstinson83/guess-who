@@ -190,6 +190,25 @@ section.hidden {
   color: #4a3b00;
 }
 
+.badge-generating {
+  background: var(--navy);
+  color: #fff;
+}
+
+#generateRandomBoardBtn {
+  margin-bottom: 1.25rem;
+}
+
+.board-generating-banner {
+  background: var(--navy-soft);
+  color: var(--navy);
+  border-radius: 10px;
+  padding: 0.7rem 0.9rem;
+  margin: 0 0 1.25rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
 /* --- Board detail --- */
 
 .board-header {
@@ -722,8 +741,36 @@ button:disabled {
   margin: 0.85rem 0 1.25rem;
 }
 
+.modal-description {
+  color: var(--muted);
+  font-size: 0.9rem;
+  text-align: left;
+  margin: 0 0 1.1rem;
+}
+
+.modal .field-label {
+  text-align: left;
+}
+
+.modal input[type='text'],
+.modal input[type='number'] {
+  font: inherit;
+  display: block;
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  margin-bottom: 0.9rem;
+}
+
 .modal button {
   width: 100%;
+}
+
+.modal #randomBoardCancelBtn {
+  margin-top: 0.5rem;
+  width: auto;
 }
 
 .modal-delete-btn {

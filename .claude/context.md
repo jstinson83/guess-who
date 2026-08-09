@@ -216,6 +216,25 @@ precisely, and what bit us before."
   created `Character`. That's a one-way, point-in-time copy: deleting a bank
   photo later never cascades to characters already created from it, since
   each character already holds its own independent portrait + traits.
+- **Random board generation** (`POST /api/boards/random`, `POST /api/boards/{id}/random/step` in
+  `board/BoardRoutes.kt`; entry point is a "🎲 Generate random board" button on the Photo Library
+  screen — a few clicks from there, not from the board list): fills a whole new board from the
+  photo bank without picking photos/traits one at a time. `POST /random` just creates the board in
+  a new `GENERATING` status and returns immediately; the *client* then drives progress by calling
+  `POST /{id}/random/step` in a loop, once per character, until the board leaves `GENERATING` —
+  deliberately not a server-side background job (see the "Client-paced generation" decision
+  below). `board/RandomBoardGenerator.kt` (pure, unit-tested like `BoardBalancer`) plans each
+  character: start from the bank photo's own `detectedFeatures` (real likeness), keep only the
+  ones `BoardBalancer.availableFeatures` still allows for the board, then pad up to a randomly
+  sized 5–8 trait set from other currently-available features (sampled from the top few by
+  balance score, not strictly greedy) so it doesn't read as mechanically identical every time —
+  "prioritize likeness, then go wild." A detected trait dropped for being unavailable is passed to
+  `generatePortrait` as a `removeTraitPhrases` entry, same diff the manual add-character flow
+  already sends. Characters are auto-named `"Character 1"`, `"Character 2"`, etc. — no real name
+  data exists for a bank photo. `BoardState.generationError` is set (board flips back to
+  `IN_PROGRESS` either way) when a run can't fully reach target size, e.g. the library runs out of
+  usable photos; the manual add-character and complete-board routes both reject a `GENERATING`
+  board with 409 so nothing else mutates it mid-run.
 - No board-quality analysis yet; game generation so far is pass-and-play
   only (saving/editing generated games not started) — see `current.md`.
 
@@ -253,6 +272,19 @@ precisely, and what bit us before."
   Don't reintroduce a bare category field expecting it to matter; if
   category-driven behavior is wanted later (e.g. a different feature pool
   per category), that's new design work, not a restoration.
+- **Client-paced generation over a server-side background job**: random board generation (see
+  "Major features" above) needs many sequential Gemini calls, which was initially built as a
+  detached background coroutine kicked off by `POST /api/boards/random`. Reconsidered before
+  shipping: Cloud Run freezes an instance's CPU when it has no request in flight by default, which
+  would silently stall a detached coroutine between requests in production unless the deploy also
+  added `--no-cpu-throttling` — extra deploy-config surface for a problem that has a simpler fix.
+  Instead, all the work happens inside normal request/response cycles: `POST /random` just creates
+  the board and returns, and the client calls `POST /{id}/random/step` in a loop, one character
+  per call, until done. No background job, no CoroutineScope threaded through `boardRoutes`, no
+  Cloud Run flag — and it's Cloud Run-safe by construction rather than by extra configuration. The
+  tradeoff: generation only progresses while a client is actively calling `step` (closing the tab
+  mid-run just pauses it — reopening the board detail page and it resumes, since progress is
+  itself the persisted character count, not separate job state).
 
 ## Maintenance
 

@@ -37,12 +37,20 @@ data class Character(
     val sourcePhotoId: String? = null,
 )
 
-enum class BoardStatus { IN_PROGRESS, COMPLETE }
+/** GENERATING is a transient state while a `POST /api/boards/random` background job is filling
+ * the board from the photo bank (see RandomBoardGenerator/BoardRoutes) — the board is otherwise
+ * a normal IN_PROGRESS board, just with manual edits blocked until the job finishes and flips
+ * the status back. */
+enum class BoardStatus { IN_PROGRESS, GENERATING, COMPLETE }
 
 /**
  * [id] is empty for a board that hasn't been persisted yet (e.g. inside [BoardBalancer]'s
  * pure functions, which only care about [targetSize] and [characters]); a [BoardRepository]
  * fills in identity/status/timestamps on create.
+ *
+ * [generationError] is set when a random-fill job (see [BoardStatus.GENERATING]) couldn't reach
+ * the board's full target size — e.g. the photo library ran out of usable photos — or failed
+ * outright; null once the board has never run one, or the last run filled it completely.
  */
 data class BoardState(
     val targetSize: Int,
@@ -52,6 +60,7 @@ data class BoardState(
     val status: BoardStatus = BoardStatus.IN_PROGRESS,
     val createdAt: String = "",
     val updatedAt: String = "",
+    val generationError: String? = null,
 )
 
 /** Lightweight projection of a [BoardState] for list views, without pulling every character. */
