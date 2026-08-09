@@ -235,6 +235,11 @@ precisely, and what bit us before."
   step re-lists the whole bank rather than excluding photos already used by this board, since a
   heavily transformed portrait — especially once traits diverge from what the source photo actually
   shows — carries its own uniqueness. Board size is therefore not capped by the photo bank's size.
+  Reuse is spread evenly rather than left to chance: `RandomBoardGenerator.plan` orders candidate
+  photos by ascending usage count on this board (from existing characters' `sourcePhotoId`,
+  shuffled within each tied tier), so every distinct photo is used once before any is used twice —
+  a Gemini failure can knock one step's pick down the priority list, but the next step's ordering
+  self-corrects since the skipped photo is still least-used.
   `BoardState.generationError` is set (board flips back to `IN_PROGRESS` either way) when a run
   can't fully reach target size — either the bank is empty, or the feature pool itself is exhausted
   for this board's targets (every feature already at quota, nothing left to plan a valid character

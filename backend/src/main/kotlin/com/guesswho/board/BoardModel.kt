@@ -49,8 +49,9 @@ enum class BoardStatus { IN_PROGRESS, GENERATING, COMPLETE }
  * fills in identity/status/timestamps on create.
  *
  * [generationError] is set when a random-fill job (see [BoardStatus.GENERATING]) couldn't reach
- * the board's full target size — e.g. the photo library ran out of usable photos — or failed
- * outright; null once the board has never run one, or the last run filled it completely.
+ * the board's full target size — e.g. the photo library is empty, or the feature pool is
+ * exhausted for this board's quotas — or failed outright; null once the board has never run one,
+ * or the last run filled it completely.
  */
 data class BoardState(
     val targetSize: Int,
