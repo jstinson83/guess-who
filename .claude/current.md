@@ -153,22 +153,3 @@ spec changes. Revisit before scoping.
       worth doing; not yet scoped (just "sign in with Google" vs. full
       auth, how it interacts with link-based sharing of boards containing
       real people's photos).
-- [ ] Anonymous seed-photo pool (renamed from "Seed photo bank" — that name
-      now collides with the unrelated **Photo Library** feature under
-      "Active task" above, which stores real people's own photos for reuse
-      across their own boards; this idea is a curated pool of *anonymous*,
-      non-identity stock-style base photos, a different concept): a small
-      curated set of *reusable* base photos, not one photo per character —
-      the same base photo can back multiple differently-mutated
-      characters, since the trait mutations (not the underlying face) are
-      what make characters distinguishable. Reuses
-      `generatePortrait()` as-is; the only new pipeline piece is where the
-      source photo comes from. Explicitly deviates from the spec's
-      "featuring people you actually know" / recognizability framing —
-      needs a `docs/PRODUCT_SPEC.md` update if/when this gets built, not
-      just a quiet code addition. Open questions: how drastic mutations
-      need to be before reusing a base photo within the same board risks
-      two characters reading as visually similar (maintainer wants to
-      test empirically rather than pre-restrict); licensing/rights for
-      photos reused across many boards/users (stricter than a one-off
-      test fixture, closer to stock-license territory).
