@@ -1,5 +1,7 @@
 package com.guesswho.board
 
+import com.guesswho.photobank.InMemoryPhotoBankRepository
+import com.guesswho.photobank.PhotoBankRepository
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation as ClientContentNegotiation
@@ -22,6 +24,7 @@ import io.ktor.server.testing.testApplication
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -38,12 +41,15 @@ class BoardRoutesTest {
 
     private fun portraitStore() = lazy { InMemoryPortraitStore() as com.guesswho.storage.PortraitStore }
 
+    private fun photoBankRepository() = lazy { InMemoryPhotoBankRepository() as PhotoBankRepository }
+
     private fun io.ktor.server.application.Application.installBoardRoutes(
         repo: Lazy<BoardRepository> = repository(),
+        photoBankRepo: Lazy<PhotoBankRepository> = photoBankRepository(),
     ): Lazy<BoardRepository> {
         install(ContentNegotiation) { json() }
         routing {
-            boardRoutes(repo, HttpClient(CIO) { install(ClientContentNegotiation) { json() } }, portraitStore())
+            boardRoutes(repo, HttpClient(CIO) { install(ClientContentNegotiation) { json() } }, portraitStore(), photoBankRepo)
         }
         return repo
     }
@@ -215,6 +221,64 @@ class BoardRoutesTest {
 
         assertEquals(HttpStatusCode.BadRequest, response.status)
         assertTrue(response.bodyAsText().contains("between 5 and 8"))
+    }
+
+    @Test
+    fun `creating a character from an unknown library photo returns 404 before calling Gemini`() = testApplication {
+        application { installBoardRoutes() }
+
+        val createResponse = client.post("/api/boards") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"name":"The Smiths","targetSize":12}""")
+        }
+        val id = Json.parseToJsonElement(createResponse.bodyAsText()).jsonObject.getValue("id").jsonPrimitive.content
+
+        val response = client.post("/api/boards/$id/characters") {
+            setBody(MultiPartFormDataContent(formData {
+                append("bankId", "default")
+                append("bankPhotoId", "does-not-exist")
+                append("name", "Jordan")
+                append("traits", """["glasses","hat","facial_hair","long_hair","hair_light"]""")
+            }))
+        }
+
+        assertEquals(HttpStatusCode.NotFound, response.status)
+        assertTrue(response.bodyAsText().contains("Library photo not found"))
+    }
+
+    @Test
+    fun `creating a character from a known library photo reuses its bytes past validation`() = testApplication {
+        val photoBankRepo = photoBankRepository()
+        application { installBoardRoutes(photoBankRepo = photoBankRepo) }
+        val photo = runBlocking {
+            photoBankRepo.value.addPhoto(
+                "default",
+                setOf("glasses", "hat"),
+                com.guesswho.storage.StoredPortrait(byteArrayOf(1, 2, 3), "image/png"),
+            )
+        }
+
+        val createResponse = client.post("/api/boards") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"name":"The Smiths","targetSize":12}""")
+        }
+        val id = Json.parseToJsonElement(createResponse.bodyAsText()).jsonObject.getValue("id").jsonPrimitive.content
+
+        // No GEMINI_API_KEY is set in this test environment, so reaching the 500 the missing-key
+        // check produces (rather than a 400/404) proves the bank photo was found and validation
+        // passed — the happy path itself calls Gemini directly, same limitation as the plain
+        // upload flow's coverage above.
+        val response = client.post("/api/boards/$id/characters") {
+            setBody(MultiPartFormDataContent(formData {
+                append("bankId", "default")
+                append("bankPhotoId", photo.id)
+                append("name", "Jordan")
+                append("traits", """["glasses","hat","facial_hair","long_hair","hair_light"]""")
+            }))
+        }
+
+        assertEquals(HttpStatusCode.InternalServerError, response.status)
+        assertTrue(response.bodyAsText().contains("GEMINI_API_KEY"))
     }
 
     @Test

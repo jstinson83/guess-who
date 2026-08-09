@@ -21,12 +21,20 @@ interface FeaturePool {
     fun allFeatures(): List<FeatureDef>
 }
 
-/** Feature ids present on a character; absence means "no" — there is no tri-state. */
+/**
+ * Feature ids present on a character; absence means "no" — there is no tri-state.
+ *
+ * [sourcePhotoId] is set when the character was created by picking a photo from the
+ * board-agnostic Photo Library (`com.guesswho.photobank`) instead of uploading a new one — it's
+ * informational only, not a live reference: deleting that bank photo later never cascades here,
+ * since this character already holds its own independent portrait + traits.
+ */
 data class Character(
     val id: String,
     val traits: Set<String>,
     val name: String = "",
     val hasPortrait: Boolean = false,
+    val sourcePhotoId: String? = null,
 )
 
 enum class BoardStatus { IN_PROGRESS, COMPLETE }

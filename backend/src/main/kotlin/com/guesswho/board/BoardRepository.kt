@@ -24,6 +24,7 @@ interface BoardRepository {
         name: String,
         traits: Set<String>,
         portrait: StoredPortrait?,
+        sourcePhotoId: String? = null,
     ): BoardState?
 
     suspend fun getCharacterPortrait(boardId: String, characterId: String): StoredPortrait?

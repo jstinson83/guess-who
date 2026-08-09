@@ -36,10 +36,17 @@ class InMemoryBoardRepository : BoardRepository {
         name: String,
         traits: Set<String>,
         portrait: StoredPortrait?,
+        sourcePhotoId: String?,
     ): BoardState? {
         val board = boards[boardId] ?: return null
         val characterId = "character-${nextId.getAndIncrement()}"
-        val character = Character(id = characterId, traits = traits, name = name, hasPortrait = portrait != null)
+        val character = Character(
+            id = characterId,
+            traits = traits,
+            name = name,
+            hasPortrait = portrait != null,
+            sourcePhotoId = sourcePhotoId,
+        )
         if (portrait != null) portraits["$boardId/$characterId"] = portrait
         val updated = board.copy(characters = board.characters + character, updatedAt = Instant.now().toString())
         boards[boardId] = updated

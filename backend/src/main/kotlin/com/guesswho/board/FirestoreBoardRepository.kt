@@ -77,6 +77,7 @@ class FirestoreBoardRepository(
         name: String,
         traits: Set<String>,
         portrait: StoredPortrait?,
+        sourcePhotoId: String?,
     ): BoardState? {
         val boardRef = boards.document(boardId)
         if (!boardRef.get().await().exists()) return null
@@ -99,6 +100,7 @@ class FirestoreBoardRepository(
                 "hasPortrait" to (portrait != null),
                 "position" to position.toLong(),
                 "createdAt" to now,
+                "sourcePhotoId" to sourcePhotoId,
             ),
         ).await()
 
@@ -153,6 +155,7 @@ class FirestoreBoardRepository(
         traits = (get("traits") as? List<*>)?.filterIsInstance<String>()?.toSet() ?: emptySet(),
         name = getString("name") ?: "",
         hasPortrait = getBoolean("hasPortrait") ?: false,
+        sourcePhotoId = getString("sourcePhotoId"),
     )
 
     private fun parseStatus(raw: String?): BoardStatus =

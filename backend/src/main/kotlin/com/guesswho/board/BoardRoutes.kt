@@ -3,6 +3,7 @@ package com.guesswho.board
 import com.guesswho.PortraitResult
 import com.guesswho.STYLE_TEMPLATE_OBJECT_NAME
 import com.guesswho.generatePortrait
+import com.guesswho.photobank.PhotoBankRepository
 import com.guesswho.storage.PortraitStore
 import com.guesswho.storage.optimizePortrait
 import io.ktor.client.HttpClient
@@ -27,7 +28,13 @@ import kotlinx.serialization.json.Json
 data class CreateBoardRequest(val name: String, val targetSize: Int)
 
 @Serializable
-data class CharacterDto(val id: String, val name: String, val traits: List<String>, val portraitUrl: String?)
+data class CharacterDto(
+    val id: String,
+    val name: String,
+    val traits: List<String>,
+    val portraitUrl: String?,
+    val sourcePhotoId: String?,
+)
 
 @Serializable
 data class FeatureStatusDto(
@@ -88,13 +95,19 @@ fun Route.featureRoutes() {
 }
 
 /**
- * [repository] and [portraitStore] are [Lazy] so building their GCP clients (which need
- * application-default credentials) is deferred until a board route is actually hit, rather than
- * at server startup. [portraitStore] is used directly here (not through [repository]) purely to
- * fetch the style-reference template image for [generatePortrait] — character portraits
- * themselves still go through [repository].
+ * [repository], [portraitStore] and [photoBankRepository] are [Lazy] so building their GCP
+ * clients (which need application-default credentials) is deferred until a board route is
+ * actually hit, rather than at server startup. [portraitStore] is used directly here (not through
+ * [repository]) purely to fetch the style-reference template image for [generatePortrait] —
+ * character portraits themselves still go through [repository]. [photoBankRepository] backs the
+ * "choose from library" add-character path — see the `/characters` handler below.
  */
-fun Route.boardRoutes(repository: Lazy<BoardRepository>, httpClient: HttpClient, portraitStore: Lazy<PortraitStore>) {
+fun Route.boardRoutes(
+    repository: Lazy<BoardRepository>,
+    httpClient: HttpClient,
+    portraitStore: Lazy<PortraitStore>,
+    photoBankRepository: Lazy<PhotoBankRepository>,
+) {
     route("/api/boards") {
         post {
             val request = call.receive<CreateBoardRequest>()
@@ -205,6 +218,8 @@ fun Route.boardRoutes(repository: Lazy<BoardRepository>, httpClient: HttpClient,
                 var name = ""
                 var traitsRaw = "[]"
                 var removeTraitsRaw = "[]"
+                var bankId = ""
+                var bankPhotoId = ""
 
                 call.receiveMultipart().forEachPart { part ->
                     when (part) {
@@ -216,6 +231,8 @@ fun Route.boardRoutes(repository: Lazy<BoardRepository>, httpClient: HttpClient,
                             "name" -> name = part.value
                             "traits" -> traitsRaw = part.value
                             "removeTraits" -> removeTraitsRaw = part.value
+                            "bankId" -> bankId = part.value
+                            "bankPhotoId" -> bankPhotoId = part.value
                             else -> {}
                         }
                         else -> {}
@@ -223,7 +240,23 @@ fun Route.boardRoutes(repository: Lazy<BoardRepository>, httpClient: HttpClient,
                     part.dispose()
                 }
 
-                val bytes = imageBytes
+                // Two mutually exclusive photo sources: a freshly uploaded/cropped image, or a
+                // `bankPhotoId` referencing an already-detected Photo Library photo — see the
+                // "choose from library" add-character path in .claude/current.md's Chunk 4.
+                val sourcePhotoId = bankPhotoId.ifBlank { null }
+                var bytes: ByteArray?
+                if (sourcePhotoId != null) {
+                    val bankPhotoImage = photoBankRepository.value.getPhotoImage(bankId, sourcePhotoId)
+                    if (bankPhotoImage == null) {
+                        call.respond(HttpStatusCode.NotFound, mapOf("error" to "Library photo not found"))
+                        return@post
+                    }
+                    bytes = bankPhotoImage.bytes
+                    imageMime = bankPhotoImage.contentType
+                } else {
+                    bytes = imageBytes
+                }
+
                 if (bytes == null) {
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing 'image'"))
                     return@post
@@ -277,7 +310,7 @@ fun Route.boardRoutes(repository: Lazy<BoardRepository>, httpClient: HttpClient,
                     }
                     is PortraitResult.Success -> {
                         val portrait = optimizePortrait(result.imageBytes, result.mimeType)
-                        val board = repository.value.addCharacter(boardId, name, traitIds, portrait)
+                        val board = repository.value.addCharacter(boardId, name, traitIds, portrait, sourcePhotoId)
                         if (board == null) {
                             call.respond(HttpStatusCode.NotFound, mapOf("error" to "Board not found"))
                             return@post
@@ -301,6 +334,7 @@ private fun BoardState.toDetailDto() = BoardDetailDto(
             name = it.name,
             traits = it.traits.toList(),
             portraitUrl = if (it.hasPortrait) "/api/boards/$id/characters/${it.id}/portrait" else null,
+            sourcePhotoId = it.sourcePhotoId,
         )
     },
     featureStatuses = BoardBalancer.featureCounts(this).map {

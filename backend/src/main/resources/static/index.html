@@ -74,8 +74,33 @@
             <circle cx="12" cy="13" r="3.2" />
           </svg>
         </button>
+        <button class="fab-option" id="fabLibrary" title="Choose from library" aria-label="Choose from library">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="3" width="7" height="7" rx="1" />
+            <rect x="14" y="3" width="7" height="7" rx="1" />
+            <rect x="3" y="14" width="7" height="7" rx="1" />
+            <rect x="14" y="14" width="7" height="7" rx="1" />
+          </svg>
+        </button>
         <button class="fab-main" id="fabMain" aria-label="Add a character">+</button>
       </div>
+    </section>
+
+    <!-- Choose a photo from the library, in place of upload/camera in the add-character flow.
+         Picking a photo here skips crop and skips re-running trait detection — see app.js's
+         selectLibraryPhoto. -->
+    <section id="boardLibraryPickView" class="hidden">
+      <button class="link-btn" id="libraryPickBackBtn">&larr; Cancel</button>
+      <h1>Choose from library</h1>
+      <p class="subtitle">Already-detected features carry over — no re-cropping needed.</p>
+
+      <div class="panel photobank-panel" id="libraryPickPanel">
+        <div id="libraryPickOverlay" class="panel-overlay hidden">
+          <div class="spinner"></div>
+        </div>
+        <div id="libraryPickGrid" class="character-grid"></div>
+      </div>
+      <div id="libraryPickStatus" class="status"></div>
     </section>
 
     <!-- Crop photo -->

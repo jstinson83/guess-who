@@ -30,8 +30,10 @@ precisely, and what bit us before."
 ## Architecture at a glance
 
 - **Backend**: Kotlin + Ktor, single service (`backend/`). Routes are split
-  by concern: `Application.kt` (server setup + `/api/transform`) and
-  `board/BoardRoutes.kt` (`/api/boards/...`).
+  by concern: `Application.kt` (server setup + `/api/transform`),
+  `board/BoardRoutes.kt` (`/api/boards/...`), and
+  `photobank/PhotoBankRoutes.kt` (`/api/photobank/...`, the board-agnostic
+  Photo Library — see "Major features" below).
 - **AI**: two Gemini call sites. `generatePortrait()` (`Gemini.kt`) — a photo
   plus a list of trait phrases to add and a list to explicitly leave out
   goes in, one stylized cartoon image comes back (framed head-and-shoulders,
@@ -193,6 +195,27 @@ precisely, and what bit us before."
   mid-game loses progress, accepted for a same-room, same-sitting MVP —
   deliberately not the same problem as the parked "async two-device play"
   idea in `current.md`, which is about reconnecting across devices/time.
+- **Photo Library** (`photobank/`, `#/library` in the frontend): a
+  board-agnostic library of real people's own photos plus their detected
+  features, independent of any board — built for reuse across boards'
+  add-character flows, not just standalone browsing. `PhotoBankRepository`
+  (`FirestorePhotoBankRepository` impl) mirrors `BoardRepository`'s
+  metadata/image-bytes split; bank photos resize to ~1024px (vs. 640px for
+  character portraits) since a bank photo is also future `generatePortrait()`
+  input, not just a thumbnail. One bank exists today (`bankId` hardcoded to
+  `"default"` in the frontend), but every photo doc carries its own `bankId`
+  so multi-bank needs no schema migration. Routes:
+  `POST/GET /api/photobank/{bankId}/photos`,
+  `GET /api/photobank/{bankId}/photos/{photoId}/image`,
+  `DELETE /api/photobank/{bankId}/photos/{photoId}`. The board add-character
+  flow forks at step 1 into "Upload new photo" (unchanged) vs. "Choose from
+  library": picking a library photo skips crop and skips a second
+  `detectTraits()` call entirely — `POST /api/boards/{id}/characters`
+  accepts a `bankId`/`bankPhotoId` pair in place of raw image bytes, fetches
+  the photo from `PhotoBankRepository`, and records `sourcePhotoId` on the
+  created `Character`. That's a one-way, point-in-time copy: deleting a bank
+  photo later never cascades to characters already created from it, since
+  each character already holds its own independent portrait + traits.
 - No board-quality analysis yet; game generation so far is pass-and-play
   only (saving/editing generated games not started) — see `current.md`.
 
