@@ -6,6 +6,7 @@ import com.google.cloud.storage.StorageOptions
 import com.guesswho.board.BoardRepository
 import com.guesswho.board.FirestoreBoardRepository
 import com.guesswho.board.boardRoutes
+import com.guesswho.board.featureRoutes
 import com.guesswho.photobank.FirestorePhotoBankRepository
 import com.guesswho.photobank.PhotoBankRepository
 import com.guesswho.photobank.photoBankRoutes
@@ -145,5 +146,6 @@ fun Application.module() {
 
         boardRoutes(boardRepository, httpClient, portraitStore)
         photoBankRoutes(photoBankRepository, httpClient)
+        featureRoutes()
     }
 }

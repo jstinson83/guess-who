@@ -72,6 +72,21 @@ data class BoardSummaryDto(
     val updatedAt: String,
 )
 
+@Serializable
+data class FeatureDto(val id: String, val label: String)
+
+/**
+ * The feature pool's id/label pairs, with no board context — used by the standalone Photo
+ * Library screen to render a bank photo's [com.guesswho.photobank.PhotoBankPhotoDto.detectedFeatures]
+ * (which is just ids) as human-readable labels. Board views don't need this: they already get
+ * labels inline via [FeatureStatusDto]/[FeatureAvailabilityDto].
+ */
+fun Route.featureRoutes() {
+    get("/api/features") {
+        call.respond(DefaultFeaturePool.allFeatures().map { FeatureDto(it.id, it.label) })
+    }
+}
+
 /**
  * [repository] and [portraitStore] are [Lazy] so building their GCP clients (which need
  * application-default credentials) is deferred until a board route is actually hit, rather than

@@ -11,6 +11,10 @@
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
+  <nav class="top-nav">
+    <a href="#/" id="navBoards" class="top-nav-link">Boards</a>
+    <a href="#/library" id="navLibrary" class="top-nav-link">Photo Library</a>
+  </nav>
   <main>
     <!-- Board list -->
     <section id="boardListView">
@@ -81,6 +85,7 @@
       <p class="subtitle">Frame their face and shoulders, then confirm.</p>
       <div id="cropContainer"><img id="cropImage" alt="" /></div>
       <button id="confirmCropBtn" disabled>Use this crop</button>
+      <div id="cropStatus" class="status"></div>
     </section>
 
     <!-- Pick features -->
@@ -113,6 +118,40 @@
       <button class="link-btn" id="gameBackBtn">&larr; Board</button>
       <div id="gameContent"></div>
     </section>
+
+    <!-- Photo Library: a board-agnostic library of photos + their detected features, browsable
+         on its own. Nothing here reads or writes any board. -->
+    <section id="libraryView" class="hidden">
+      <h1>Photo Library</h1>
+      <p class="subtitle">A reusable library of photos, independent of any board.</p>
+
+      <div class="panel photobank-panel" id="photoBankPanel">
+        <div id="photoBankOverlay" class="panel-overlay hidden">
+          <div class="spinner"></div>
+        </div>
+        <div id="photoBankGrid" class="character-grid"></div>
+      </div>
+      <div id="libraryStatus" class="status"></div>
+
+      <div class="fab-container" id="libraryFabContainer">
+        <input type="file" id="libraryUploadInput" accept="image/*" class="hidden" />
+        <input type="file" id="libraryCameraInput" accept="image/*" capture="environment" class="hidden" />
+        <button class="fab-option" id="libraryFabUpload" title="Upload a photo" aria-label="Upload a photo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 15V4" />
+            <path d="M7.5 8.5 12 4l4.5 4.5" />
+            <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />
+          </svg>
+        </button>
+        <button class="fab-option" id="libraryFabCamera" title="Take a photo" aria-label="Take a photo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 8a2 2 0 0 1 2-2h1.4l.9-1.4a1 1 0 0 1 .84-.6h5.72a1 1 0 0 1 .84.6L16.6 6H18a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z" />
+            <circle cx="12" cy="13" r="3.2" />
+          </svg>
+        </button>
+        <button class="fab-main" id="libraryFabMain" aria-label="Add a photo">+</button>
+      </div>
+    </section>
   </main>
 
   <!-- Character modal: shown on successful create, and when a board tile is clicked -->
@@ -122,6 +161,7 @@
       <img id="characterModalPortrait" class="modal-portrait" alt="" />
       <div id="characterModalSubtitle" class="modal-subtitle"></div>
       <button id="characterModalDismissBtn">Done</button>
+      <button id="characterModalDeleteBtn" class="link-btn modal-delete-btn hidden">Delete this photo</button>
     </div>
   </div>
 
