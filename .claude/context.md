@@ -244,7 +244,15 @@ precisely, and what bit us before."
   can't fully reach target size — either the bank is empty, or the feature pool itself is exhausted
   for this board's targets (every feature already at quota, nothing left to plan a valid character
   from); the manual add-character and complete-board routes both reject a `GENERATING` board with
-  409 so nothing else mutates it mid-run.
+  409 so nothing else mutates it mid-run. **A stalled run needs an explicit resume**: the client
+  (`runRandomBoardSteps` in `app.js`) only polls `/random/step` while status is `GENERATING`, so a
+  board that hit `generationError` stays stuck even after whatever caused it is fixed (more photos
+  added, a code fix shipped) — nothing re-polls it on its own. `POST /{id}/random/resume` (same
+  file) is the way back in: same preconditions as a fresh `/random` (board exists, has room left,
+  `GEMINI_API_KEY` set), clears `generationError` and flips back to `GENERATING` via the same
+  `startGenerating` repository call `/random` uses. The board detail screen shows a "Resume
+  generating" button (`#resumeGenerationBtn`) whenever `generationError` is set, which calls it and
+  then kicks `runRandomBoardSteps` itself, same as the initial create flow.
 - No board-quality analysis yet; game generation so far is pass-and-play
   only (saving/editing generated games not started) — see `current.md`.
 

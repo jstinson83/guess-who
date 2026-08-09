@@ -36,6 +36,7 @@ const boardNameEl = document.getElementById('boardName');
 const boardMetaEl = document.getElementById('boardMeta');
 const boardGeneratingBanner = document.getElementById('boardGeneratingBanner');
 const boardGenerationNoticeEl = document.getElementById('boardGenerationNotice');
+const resumeGenerationBtn = document.getElementById('resumeGenerationBtn');
 const characterGrid = document.getElementById('characterGrid');
 const traitsEl = document.getElementById('traits');
 
@@ -272,6 +273,8 @@ function renderBoardDetail() {
 
   boardGenerationNoticeEl.classList.toggle('hidden', !board.generationError);
   boardGenerationNoticeEl.textContent = board.generationError || '';
+  resumeGenerationBtn.classList.toggle('hidden', !board.generationError);
+  resumeGenerationBtn.disabled = false;
 
   const hasEnoughCharacters = board.characters.length >= board.targetSize;
   const completeBtn = document.getElementById('completeBoardBtn');
@@ -401,6 +404,28 @@ document.getElementById('completeBoardBtn').addEventListener('click', async () =
   if (!res.ok) return;
   currentBoard = board;
   renderBoardDetail();
+});
+
+// A board only ever ends up here (IN_PROGRESS with generationError set) after a random-fill run
+// hit a permanent stop — see runOneRandomStep's stopGenerating calls in BoardRoutes.kt. Nothing
+// resumes it automatically since the client only polls /random/step while status is GENERATING,
+// so this is the only way back in once whatever caused the stop is addressed (more library
+// photos, a lower target size, a server-side fix).
+resumeGenerationBtn.addEventListener('click', async () => {
+  if (!currentBoard) return;
+  resumeGenerationBtn.disabled = true;
+  const id = currentBoard.id;
+  const res = await fetch(`/api/boards/${id}/random/resume`, { method: 'POST' });
+  const board = await res.json();
+  if (!res.ok) {
+    resumeGenerationBtn.disabled = false;
+    boardGenerationNoticeEl.textContent = board.error || 'Failed to resume generation';
+    return;
+  }
+  if (currentBoard.id !== id) return;
+  currentBoard = board;
+  renderBoardDetail();
+  runRandomBoardSteps(id);
 });
 
 // --- Pass-and-play game ---
