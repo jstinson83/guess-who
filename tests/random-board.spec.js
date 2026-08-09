@@ -133,7 +133,7 @@ test.describe('board detail generation progress', () => {
             board({
               status: 'IN_PROGRESS',
               characters: [{ id: 'c0', name: 'Character 1', traits: ['glasses'], portraitUrl: PIXEL }],
-              generationError: 'Generated 1 of 3 — ran out of usable library photos. Add more to the library, or add the rest manually.',
+              generationError: "Generated 1 of 3 — the available feature pool is exhausted for this board's targets. Add the rest manually, or raise the target size.",
             })
           ),
         });
@@ -144,6 +144,6 @@ test.describe('board detail generation progress', () => {
     await page.goto('/#/board/rb1');
     await expect(page.locator('#boardGeneratingBanner')).toBeHidden();
     await expect(page.locator('#boardGenerationNotice')).toBeVisible();
-    await expect(page.locator('#boardGenerationNotice')).toContainText('ran out of usable library photos');
+    await expect(page.locator('#boardGenerationNotice')).toContainText('feature pool is exhausted');
   });
 });

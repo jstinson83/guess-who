@@ -231,10 +231,15 @@ precisely, and what bit us before."
   "prioritize likeness, then go wild." A detected trait dropped for being unavailable is passed to
   `generatePortrait` as a `removeTraitPhrases` entry, same diff the manual add-character flow
   already sends. Characters are auto-named `"Character 1"`, `"Character 2"`, etc. — no real name
-  data exists for a bank photo. `BoardState.generationError` is set (board flips back to
-  `IN_PROGRESS` either way) when a run can't fully reach target size, e.g. the library runs out of
-  usable photos; the manual add-character and complete-board routes both reject a `GENERATING`
-  board with 409 so nothing else mutates it mid-run.
+  data exists for a bank photo. **A bank photo can back more than one character**: every candidate
+  step re-lists the whole bank rather than excluding photos already used by this board, since a
+  heavily transformed portrait — especially once traits diverge from what the source photo actually
+  shows — carries its own uniqueness. Board size is therefore not capped by the photo bank's size.
+  `BoardState.generationError` is set (board flips back to `IN_PROGRESS` either way) when a run
+  can't fully reach target size — either the bank is empty, or the feature pool itself is exhausted
+  for this board's targets (every feature already at quota, nothing left to plan a valid character
+  from); the manual add-character and complete-board routes both reject a `GENERATING` board with
+  409 so nothing else mutates it mid-run.
 - No board-quality analysis yet; game generation so far is pass-and-play
   only (saving/editing generated games not started) — see `current.md`.
 
