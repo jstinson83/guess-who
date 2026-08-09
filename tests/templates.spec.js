@@ -132,10 +132,31 @@ test.describe('traitSwitchHtml', () => {
 });
 
 test.describe('game screens', () => {
-  test('gameCardHtml renders a portrait and name', async ({ page }) => {
+  test('gameCardHtml renders a portrait and name by default', async ({ page }) => {
     const html = await page.evaluate(() => gameCardHtml({ portraitUrl: '/p.png', name: 'Bob' }));
     expect(html).toContain('/p.png');
     expect(html).toContain('Bob');
+    expect(html).toContain('game-card-name');
+  });
+
+  test('gameCardHtml omits the visible name when showName is false', async ({ page }) => {
+    const html = await page.evaluate(() =>
+      gameCardHtml({ portraitUrl: '/p.png', name: 'Bob' }, { showName: false })
+    );
+    expect(html).toContain('/p.png');
+    expect(html).not.toContain('game-card-name');
+    // The image keeps its alt text for accessibility even with the visible label hidden.
+    expect(html).toContain('alt="Bob"');
+  });
+
+  test('gameCardDetailModalHtml renders the name, traits, and a close button', async ({ page }) => {
+    const html = await page.evaluate(() =>
+      gameCardDetailModalHtml({ name: 'Bob', portraitUrl: '/p.png', traitLabels: 'Hat, Beard' })
+    );
+    expect(html).toContain('Bob');
+    expect(html).toContain('/p.png');
+    expect(html).toContain('Hat, Beard');
+    expect(html).toContain('id="closeGameCardDetailBtn"');
   });
 
   test('pickScreenHtml names the picking player and warns off the other one', async ({ page }) => {

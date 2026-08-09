@@ -1022,12 +1022,14 @@ button:disabled {
   margin: 0.75rem auto 0;
 }
 
-.game-card-pickable {
+.game-card-pickable,
+.game-card-clickable {
   cursor: pointer;
   transition: border-color 0.15s ease, transform 0.08s ease;
 }
 
-.game-card-pickable:hover {
+.game-card-pickable:hover,
+.game-card-clickable:hover {
   border-color: var(--accent);
 }
 
