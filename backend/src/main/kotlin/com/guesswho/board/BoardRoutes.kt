@@ -27,7 +27,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
-// The only photo bank that exists today (mirrors PHOTO_BANK_ID in app.js) — random-board
+// The only photo bank that exists today (mirrors PHOTO_BANK_ID in state.js) — random-board
 // generation isn't bank-aware yet since nothing else in the app is either.
 private const val RANDOM_BOARD_BANK_ID = "default"
 
@@ -247,14 +247,14 @@ fun Route.boardRoutes(
                 // The full pool, not just currently-available features: a detected-but-unavailable
                 // trait (e.g. the board already has enough hats) still needs to reach the client so
                 // it can be signaled to generatePortrait() as something to explicitly leave out —
-                // see the removeTraits diff in app.js's generateBtn handler.
+                // see the removeTraits diff in characters.js's generateBtn handler.
                 when (val result = detectTraits(httpClient, apiKey, bytes, imageMime, DefaultFeaturePool.allFeatures())) {
                     is TraitDetectionResult.Failure -> call.respond(result.status, mapOf("error" to result.error))
                     is TraitDetectionResult.Success -> call.respond(mapOf("traitIds" to result.traitIds.toList()))
                 }
             }
 
-            // The client polls this in a loop (see runRandomBoardSteps in app.js) while a board
+            // The client polls this in a loop (see runRandomBoardSteps in boards.js) while a board
             // is GENERATING. It never blocks on Gemini: if no step is already running for this
             // board (see activeGenerationSteps), it kicks one off on backgroundScope and returns
             // immediately either way, so the poll always comes back fast regardless of whether it

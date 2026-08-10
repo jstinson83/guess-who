@@ -44,10 +44,12 @@ the app starts fine without it.
   `FirestoreBoardRepository` to upload a generated portrait's bytes and
   fetch them back for the portrait route above.
 - `backend/src/main/resources/static/` — the whole frontend: `index.html` +
-  `app.js` (board list/create view, board detail/add-character view, and the
-  pass-and-play game view, hash-routed at `#/board/<id>` and
-  `#/board/<id>/play`), `templates.js` (every markup-building function
-  `app.js` calls, kept separate — see `CLAUDE.md`), a
+  a set of plain, no-build-step view scripts split by feature area
+  (`state.js` for shared DOM refs/mutable state, `router.js` for hash
+  routing, `boards.js`, `game.js`, `crop.js`, `characters.js`, `library.js`,
+  `modals.js` — hash-routed at `#/board/<id>`, `#/board/<id>/play`, etc.),
+  `templates.js` (every markup-building function the view scripts call,
+  kept separate — see `CLAUDE.md`), a
   [Cropper.js](https://github.com/fengyuanchen/cropperjs) crop box (vendored
   locally in `static/vendor/`, no CDN dependency), and `styles.css`.
 

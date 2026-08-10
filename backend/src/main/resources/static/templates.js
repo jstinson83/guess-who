@@ -1,6 +1,7 @@
-// Pure `data -> HTML string` functions, kept separate from app.js so the DOM
-// wiring/event logic isn't interleaved with markup. Loaded as a plain global
-// script (no build step, no modules) before app.js — see index.html.
+// Pure `data -> HTML string` functions, kept separate from the view scripts (state.js,
+// boards.js, game.js, crop.js, characters.js, library.js, modals.js, router.js) so the DOM
+// wiring/event logic isn't interleaved with markup. Loaded as a plain global script (no build
+// step, no modules) before them — see index.html.
 //
 // Deliberately not `<template>`-element cloning: these stay callable as
 // plain functions of data, which is the easiest shape to port to a

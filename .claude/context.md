@@ -71,10 +71,14 @@ precisely, and what bit us before."
   gotchas (`ApiFuture` vs. Guava's `ListenableFuture`, the bucket/IAM setup
   and object-naming scheme for portraits).
 - **Frontend**: one static HTML page (`backend/src/main/resources/static/index.html`)
-  plus `app.js` (view logic), `templates.js` (markup-building functions —
-  see `CLAUDE.md`), and vendored `Cropper.js` for the crop UI, served
-  directly by Ktor's `staticResources` — no framework, no build step, no
-  CDN dependency. Views toggle by hash route: board list/create,
+  plus view logic split by feature area — `state.js` (shared DOM refs +
+  mutable state, loaded first), `router.js` (hash routing, loaded last),
+  `boards.js`, `game.js`, `crop.js`, `characters.js`, `library.js`,
+  `modals.js` — all plain global scripts sharing state via `state.js`, no
+  modules/bundler. Plus `templates.js` (markup-building functions — see
+  `CLAUDE.md`), and vendored `Cropper.js` for the crop UI, served directly
+  by Ktor's `staticResources` — no framework, no build step, no CDN
+  dependency. Views toggle by hash route: board list/create,
   `#/board/<id>` detail (character grid + add-a-character flow), and
   `#/board/<id>/play` (pass-and-play game). This replaced the old
   single-page freeform-trait upload UI described in "Decisions" below.
@@ -148,7 +152,7 @@ precisely, and what bit us before."
   hard block, unlike the min/max.
 - Board list + create-board UI, board detail UI (character grid,
   add-a-character flow reusing the Cropper.js crop step) —
-  `static/index.html` + `static/app.js`. This replaced the old single-page
+  `static/index.html` + the `static/*.js` view scripts. This replaced the old single-page
   freeform-trait upload UI as the app's front door.
 - Add-character flow is wizard-gated: the feature checklist (step 3) stays
   hidden until the user explicitly confirms their crop (`confirmCropBtn`,
@@ -174,7 +178,7 @@ precisely, and what bit us before."
   add-character goes through `/api/boards/{id}/characters` instead, which
   calls the same shared `generatePortrait()` helper).
 - **Pass-and-play game screen** (`#/board/<id>/play`, entirely in
-  `static/app.js` — no new backend route): playable once a board is
+  `static/game.js` — no new backend route): playable once a board is
   `COMPLETE` (board detail swaps the disabled "Mark board complete" button
   for an enabled "Play" link at that point). Setup has each player
   privately pick a secret character (the other player must guess it), with
@@ -191,7 +195,7 @@ precisely, and what bit us before."
   no-secrecy-during-play property possible — the app is an honest referee,
   so there's nothing left to hide except the two initial picks. A wrong
   final guess is an immediate loss (classic rule, no take-backs). Session
-  state is client-only (a `gameState` object in `app.js`); a page refresh
+  state is client-only (a `gameState` object in `game.js`); a page refresh
   mid-game loses progress, accepted for a same-room, same-sitting MVP —
   deliberately not the same problem as the parked "async two-device play"
   idea in `current.md`, which is about reconnecting across devices/time.
@@ -200,7 +204,7 @@ precisely, and what bit us before."
   (hair_light/hair_dark → "Hair color", eyes_big/eyes_small → "Eye size",
   skin_light/skin_dark → "Skin tone", young/old → "Age") and threaded through
   `FeatureStatusDto`. The play screen's trait-ask grid (`renderPlayScreen` in
-  `app.js`) collapses same-`groupLabel` features into one category button
+  `game.js`) collapses same-`groupLabel` features into one category button
   (`traitGroupButtonHtml`/`.trait-group-btn`) that opens a small option-picker
   modal (`traitGroupModalHtml`, `showTraitGroupModal`) instead of listing every
   option flat — cuts a 22-feature board down to 18 tappable rows and keeps each
@@ -276,7 +280,7 @@ precisely, and what bit us before."
   for this board's targets (every feature already at quota, nothing left to plan a valid character
   from); the manual add-character and complete-board routes both reject a `GENERATING` board with
   409 so nothing else mutates it mid-run. **A stalled run needs an explicit resume**: the client
-  (`runRandomBoardSteps` in `app.js`) only polls `/random/step` while status is `GENERATING`, so a
+  (`runRandomBoardSteps` in `boards.js`) only polls `/random/step` while status is `GENERATING`, so a
   board that hit `generationError` stays stuck even after whatever caused it is fixed (more photos
   added, a code fix shipped) — nothing re-polls it on its own. `POST /{id}/random/resume` (same
   file) is the way back in: same preconditions as a fresh `/random` (board exists, has room left,
@@ -336,7 +340,7 @@ precisely, and what bit us before."
   `Application.kt`, cancelled on `ApplicationStopping`) only if nothing's already running for that
   board on this instance (a `ConcurrentHashMap.newKeySet<String>()` debounce guard,
   `activeGenerationSteps` in `BoardRoutes.kt`), and returns current state immediately either way.
-  The client (`runRandomBoardSteps` in `app.js`) just polls that endpoint on a timer
+  The client (`runRandomBoardSteps` in `boards.js`) just polls that endpoint on a timer
   (`RANDOM_BOARD_POLL_MS`, 2s) and re-renders whatever comes back.
   Deliberately shipped **without** `--no-cpu-throttling`: a step can still get CPU-throttled
   mid-Gemini-call if its instance goes idle, but the design self-heals rather than needing that

@@ -90,7 +90,7 @@ test.describe('board detail generation progress', () => {
       return route.continue();
     });
     await page.route('**/api/boards/rb1/random/step', async (route) => {
-      // No artificial delay needed here — app.js's poll loop already waits ~2s between calls
+      // No artificial delay needed here — boards.js's poll loop already waits ~2s between calls
       // (see RANDOM_BOARD_POLL_MS), which is enough for the test to observe the GENERATING
       // state mid-run instead of racing straight past it.
       stepCount += 1;
