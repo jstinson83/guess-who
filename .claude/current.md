@@ -135,7 +135,7 @@ spec, not a maintainer commitment.
 ### Game generation
 
 - [x] Generate a playable mobile game from a completed board — pass-and-play
-      only so far (`#/board/<id>/play` in `static/app.js`); see
+      only so far (`#/board/<id>/play` in `static/game.js`); see
       `context.md`'s Major features for the design
 - [ ] Save and edit generated games
 

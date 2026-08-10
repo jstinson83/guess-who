@@ -91,8 +91,8 @@
     </section>
 
     <!-- Choose a photo from the library, in place of upload/camera in the add-character flow.
-         Picking a photo here skips crop and skips re-running trait detection — see app.js's
-         selectLibraryPhoto. -->
+         Picking a photo here skips crop and skips re-running trait detection — see
+         characters.js's selectLibraryPhoto. -->
     <section id="boardLibraryPickView" class="hidden">
       <button class="link-btn" id="libraryPickBackBtn">&larr; Cancel</button>
       <h1>Choose from library</h1>
@@ -141,7 +141,7 @@
       </div>
     </section>
 
-    <!-- Pass-and-play game: one content container, re-rendered per phase by app.js
+    <!-- Pass-and-play game: one content container, re-rendered per phase by game.js
          (setup picks, pass-device interstitials, play, game over). -->
     <section id="gameView" class="hidden">
       <button class="link-btn" id="gameBackBtn">&larr; Board</button>
@@ -198,7 +198,7 @@
 
   <!-- Generate-random-board modal: launched from the Photo Library screen's FAB-adjacent
        button. Picks photos from the library at random and fills in the rest of each
-       character's features itself — see app.js's randomBoardGenerateBtn handler. -->
+       character's features itself — see modals.js's randomBoardGenerateBtn handler. -->
   <div id="randomBoardModal" class="modal-overlay hidden">
     <div class="modal">
       <h2>Generate a random board</h2>
@@ -215,6 +215,13 @@
 
   <script src="/vendor/cropper.min.js"></script>
   <script src="/templates.js"></script>
-  <script src="/app.js"></script>
+  <script src="/state.js"></script>
+  <script src="/modals.js"></script>
+  <script src="/boards.js"></script>
+  <script src="/game.js"></script>
+  <script src="/crop.js"></script>
+  <script src="/characters.js"></script>
+  <script src="/library.js"></script>
+  <script src="/router.js"></script>
 </body>
 </html>
