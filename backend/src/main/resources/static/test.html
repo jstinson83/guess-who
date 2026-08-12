@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Art Style Test</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      max-width: 640px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      color: #222;
+    }
+    h1 {
+      font-size: 1.4rem;
+    }
+    p.note {
+      color: #666;
+      font-size: 0.9rem;
+    }
+    label {
+      display: block;
+      font-weight: 600;
+      margin-top: 1.2rem;
+      margin-bottom: 0.3rem;
+    }
+    input[type="file"] {
+      display: block;
+    }
+    textarea {
+      width: 100%;
+      min-height: 6rem;
+      font: inherit;
+      box-sizing: border-box;
+      padding: 0.5rem;
+    }
+    button {
+      margin-top: 1.2rem;
+      padding: 0.6rem 1.2rem;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+    #status {
+      margin-top: 1rem;
+      font-size: 0.9rem;
+    }
+    #status.error {
+      color: #b00020;
+    }
+    #result {
+      margin-top: 1.5rem;
+    }
+    #result img {
+      max-width: 100%;
+      border: 1px solid #ddd;
+    }
+  </style>
+</head>
+<body>
+  <h1>Art Style Test</h1>
+  <p class="note">
+    Upload a photo, type any prompt, generate. Nothing here is saved — this page exists purely
+    to experiment with art styles. Gemini's safety filters are set to their most permissive
+    thresholds for this page only.
+  </p>
+
+  <form id="test-form">
+    <label for="image">Photo</label>
+    <input type="file" id="image" name="image" accept="image/*" required />
+
+    <label for="prompt">Prompt</label>
+    <textarea id="prompt" name="prompt" placeholder="e.g. Redraw this as a 1990s Saturday morning cartoon character" required></textarea>
+
+    <button type="submit" id="submit-btn">Generate</button>
+  </form>
+
+  <div id="status"></div>
+
+  <div id="result"></div>
+
+  <script>
+    const form = document.getElementById('test-form');
+    const submitBtn = document.getElementById('submit-btn');
+    const statusEl = document.getElementById('status');
+    const resultEl = document.getElementById('result');
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+
+      const imageInput = document.getElementById('image');
+      const promptInput = document.getElementById('prompt');
+
+      if (!imageInput.files[0]) return;
+
+      submitBtn.disabled = true;
+      statusEl.textContent = 'Generating...';
+      statusEl.className = '';
+      resultEl.innerHTML = '';
+
+      const formData = new FormData();
+      formData.append('image', imageInput.files[0]);
+      formData.append('prompt', promptInput.value);
+
+      try {
+        const res = await fetch('/api/test-transform', {
+          method: 'POST',
+          body: formData,
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || `Request failed (${res.status})`);
+        }
+
+        statusEl.textContent = 'Done.';
+        const img = document.createElement('img');
+        img.src = data.image;
+        resultEl.appendChild(img);
+      } catch (err) {
+        statusEl.textContent = err.message;
+        statusEl.className = 'error';
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
