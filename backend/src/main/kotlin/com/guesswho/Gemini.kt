@@ -26,7 +26,23 @@ data class GeminiPart(val text: String? = null, val inlineData: GeminiInlineData
 data class GeminiContent(val parts: List<GeminiPart>)
 
 @Serializable
-data class GeminiRequest(val contents: List<GeminiContent>)
+data class GeminiRequest(val contents: List<GeminiContent>, val safetySettings: List<GeminiSafetySetting>? = null)
+
+@Serializable
+data class GeminiSafetySetting(val category: String, val threshold: String)
+
+/**
+ * Gemini's default safety filters are prone to false-positive blocks on ordinary photo content
+ * (e.g. swimwear) even with nothing actually explicit involved. Used only by the `/test` art-style
+ * page (via [generateStyleTestImage]) where there's no real subject/likeness at stake — not by
+ * [generatePortrait], so the real portrait pipeline keeps Gemini's default thresholds.
+ */
+private val MOST_PERMISSIVE_SAFETY_SETTINGS = listOf(
+    GeminiSafetySetting("HARM_CATEGORY_HARASSMENT", "BLOCK_NONE"),
+    GeminiSafetySetting("HARM_CATEGORY_HATE_SPEECH", "BLOCK_NONE"),
+    GeminiSafetySetting("HARM_CATEGORY_SEXUALLY_EXPLICIT", "BLOCK_NONE"),
+    GeminiSafetySetting("HARM_CATEGORY_DANGEROUS_CONTENT", "BLOCK_NONE"),
+)
 
 @Serializable
 data class GeminiGenerationConfig(val responseMimeType: String)
@@ -127,8 +143,34 @@ suspend fun generatePortrait(
         }
     }
 
-    val geminiRequest = GeminiRequest(contents = listOf(GeminiContent(parts = parts)))
+    return callGemini(httpClient, apiKey, GeminiRequest(contents = listOf(GeminiContent(parts = parts))))
+}
 
+/**
+ * Style-experimentation variant for the `/test` page: sends [prompt] to Gemini verbatim (no
+ * likeness/caricature scaffolding) alongside [imageBytes], with the most permissive safety
+ * thresholds Gemini exposes (see [MOST_PERMISSIVE_SAFETY_SETTINGS]) since this is throwaway
+ * art-style experimentation, not the real portrait pipeline.
+ */
+suspend fun generateStyleTestImage(
+    httpClient: HttpClient,
+    apiKey: String,
+    imageBytes: ByteArray,
+    imageMime: String,
+    prompt: String,
+): PortraitResult {
+    val parts = listOf(
+        GeminiPart(text = prompt),
+        GeminiPart(inlineData = GeminiInlineData(imageMime, Base64.getEncoder().encodeToString(imageBytes))),
+    )
+    return callGemini(
+        httpClient,
+        apiKey,
+        GeminiRequest(contents = listOf(GeminiContent(parts = parts)), safetySettings = MOST_PERMISSIVE_SAFETY_SETTINGS),
+    )
+}
+
+private suspend fun callGemini(httpClient: HttpClient, apiKey: String, geminiRequest: GeminiRequest): PortraitResult {
     val response = httpClient.post(GEMINI_URL) {
         header("x-goog-api-key", apiKey)
         contentType(ContentType.Application.Json)

@@ -15,6 +15,7 @@ import com.guesswho.storage.PortraitStore
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation as ClientContentNegotiation
+import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.PartData
 import io.ktor.http.content.forEachPart
@@ -32,6 +33,8 @@ import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.statuspages.StatusPages
 import io.ktor.server.request.receiveMultipart
 import io.ktor.server.response.respond
+import io.ktor.server.response.respondText
+import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.routing
 import java.util.Base64
@@ -125,6 +128,66 @@ fun Application.module() {
 
     routing {
         staticResources("/", "static", index = "index.html")
+
+        // Standalone art-style experimentation page — upload a photo, type any prompt, see the
+        // Gemini output. Nothing here is persisted (no board, no Firestore, no GCS). Served as an
+        // explicit route (rather than relying on staticResources) so it's reachable at "/test"
+        // without the ".html" extension.
+        get("/test") {
+            val html = call.application.environment.classLoader.getResourceAsStream("static/test.html")
+                ?.bufferedReader()?.readText()
+            if (html == null) {
+                call.respond(HttpStatusCode.NotFound)
+            } else {
+                call.respondText(html, ContentType.Text.Html)
+            }
+        }
+
+        // Backs the /test page above. Deliberately separate from POST /api/transform: it takes a
+        // freeform prompt instead of the board trait pipeline, and calls generateStyleTestImage
+        // (permissive Gemini safety thresholds) instead of generatePortrait — see Gemini.kt. Never
+        // persists the uploaded photo or the generated image anywhere.
+        post("/api/test-transform") {
+            var imageBytes: ByteArray? = null
+            var imageMime = "image/png"
+            var prompt = ""
+
+            call.receiveMultipart().forEachPart { part ->
+                when (part) {
+                    is PartData.FileItem -> {
+                        imageBytes = part.streamProvider().readBytes()
+                        imageMime = part.contentType?.toString() ?: "image/png"
+                    }
+                    is PartData.FormItem -> if (part.name == "prompt") prompt = part.value
+                    else -> {}
+                }
+                part.dispose()
+            }
+
+            val bytes = imageBytes
+            if (bytes == null) {
+                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing 'image'"))
+                return@post
+            }
+            if (prompt.isBlank()) {
+                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing 'prompt'"))
+                return@post
+            }
+
+            val apiKey = System.getenv("GEMINI_API_KEY")
+            if (apiKey.isNullOrBlank()) {
+                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "GEMINI_API_KEY is not set on the server"))
+                return@post
+            }
+
+            when (val result = generateStyleTestImage(httpClient, apiKey, bytes, imageMime, prompt)) {
+                is PortraitResult.Success -> {
+                    val dataUrl = "data:${result.mimeType};base64,${Base64.getEncoder().encodeToString(result.imageBytes)}"
+                    call.respond(mapOf("image" to dataUrl))
+                }
+                is PortraitResult.Failure -> call.respond(result.status, mapOf("error" to result.error))
+            }
+        }
 
         post("/api/transform") {
             var imageBytes: ByteArray? = null
