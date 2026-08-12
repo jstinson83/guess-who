@@ -52,10 +52,16 @@ data class GeminiGenerationConfig(val responseMimeType: String)
 data class GeminiTextRequest(val contents: List<GeminiContent>, val generationConfig: GeminiGenerationConfig)
 
 @Serializable
-data class GeminiCandidate(val content: GeminiContent? = null)
+data class GeminiCandidate(val content: GeminiContent? = null, val finishReason: String? = null)
 
 @Serializable
-data class GeminiResponse(val candidates: List<GeminiCandidate> = emptyList())
+data class GeminiPromptFeedback(val blockReason: String? = null)
+
+@Serializable
+data class GeminiResponse(
+    val candidates: List<GeminiCandidate> = emptyList(),
+    val promptFeedback: GeminiPromptFeedback? = null,
+)
 
 sealed interface PortraitResult {
     data class Success(val imageBytes: ByteArray, val mimeType: String) : PortraitResult
@@ -182,8 +188,18 @@ private suspend fun callGemini(httpClient: HttpClient, apiKey: String, geminiReq
     }
 
     val geminiResponse = response.body<GeminiResponse>()
-    val image = geminiResponse.candidates.firstOrNull()?.content?.parts?.firstOrNull { it.inlineData != null }?.inlineData
-        ?: return PortraitResult.Failure(HttpStatusCode.BadGateway, "Gemini did not return an image")
+    val candidate = geminiResponse.candidates.firstOrNull()
+    val image = candidate?.content?.parts?.firstOrNull { it.inlineData != null }?.inlineData
+    if (image == null) {
+        // Gemini reports why nothing came back via promptFeedback.blockReason (prompt rejected
+        // before generation) or the candidate's finishReason (e.g. IMAGE_SAFETY, rejected after
+        // generation) — surface whichever is present instead of a bare "no image" message, since
+        // that reason is the only signal for whether this is Gemini's safety filtering or
+        // something else.
+        val reason = geminiResponse.promptFeedback?.blockReason ?: candidate?.finishReason
+        val suffix = if (reason != null) " (reason: $reason)" else ""
+        return PortraitResult.Failure(HttpStatusCode.BadGateway, "Gemini did not return an image$suffix")
+    }
 
     return PortraitResult.Success(Base64.getDecoder().decode(image.data), image.mimeType)
 }
